@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/exercise.dart';
 import '../models/exercise_type.dart';
 import '../models/workout_log.dart';
+import '../services/database_service.dart';
 import '../widgets/add_log_sheet.dart';
 import '../widgets/volume_chart_sheet.dart';
 
@@ -16,16 +17,17 @@ class ExerciseDetailScreen extends StatefulWidget {
 
 class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
   late String _name;
+  late List<WorkoutLog> _logs;
 
   @override
   void initState() {
     super.initState();
     _name = widget.exercise.name;
+    _logs = List.from(widget.exercise.logs);
   }
 
   List<WorkoutLog> get _recentLogs {
-    final sorted = [...widget.exercise.logs]
-      ..sort((a, b) => b.date.compareTo(a.date));
+    final sorted = [..._logs]..sort((a, b) => b.date.compareTo(a.date));
     return sorted.take(10).toList();
   }
 
@@ -64,13 +66,23 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
             ),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               final trimmed = controller.text.trim();
-              if (trimmed.isNotEmpty) {
-                setState(() => _name = trimmed);
-                widget.exercise.name = trimmed;
-              }
               Navigator.pop(context);
+              if (trimmed.isEmpty || trimmed == _name) return;
+              setState(() => _name = trimmed);
+              widget.exercise.name = trimmed;
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                await DatabaseService.instance
+                    .updateExerciseName(widget.exercise.id, trimmed);
+              } catch (e) {
+                if (mounted) {
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Failed to rename: $e')),
+                  );
+                }
+              }
             },
             child: const Text(
               'Save',
@@ -88,9 +100,19 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => AddLogSheet(exerciseType: widget.exercise.exerciseType),
-    ).then((log) {
+    ).then((log) async {
       if (log == null) return;
-      setState(() => widget.exercise.logs.add(log));
+      try {
+        final saved =
+            await DatabaseService.instance.addLog(widget.exercise.id, log);
+        setState(() => _logs.add(saved));
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to save log: $e')),
+          );
+        }
+      }
     });
   }
 
@@ -103,16 +125,34 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
         exerciseType: widget.exercise.exerciseType,
         initialLog: original,
       ),
-    ).then((updated) {
+    ).then((updated) async {
       if (updated == null) return;
-      setState(() {
-        final index = widget.exercise.logs.indexOf(original);
-        if (index != -1) widget.exercise.logs[index] = updated;
-      });
+      final withId = updated.copyWith(id: original.id);
+      try {
+        await DatabaseService.instance.updateLog(withId);
+        setState(() {
+          final index = _logs.indexOf(original);
+          if (index != -1) _logs[index] = withId;
+        });
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to update log: $e')),
+          );
+        }
+      }
     });
   }
 
   void _showVolumeChart() {
+    // Pass an exercise with current local logs so the chart reflects unsaved changes
+    final exerciseForChart = Exercise(
+      id: widget.exercise.id,
+      name: _name,
+      muscleGroup: widget.exercise.muscleGroup,
+      exerciseType: widget.exercise.exerciseType,
+      logs: _logs,
+    );
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -121,7 +161,8 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
         initialChildSize: 0.75,
         minChildSize: 0.5,
         maxChildSize: 0.92,
-        builder: (_, controller) => VolumeChartSheet(exercise: widget.exercise),
+        builder: (_, controller) =>
+            VolumeChartSheet(exercise: exerciseForChart),
       ),
     );
   }
@@ -145,12 +186,14 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
           ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+          icon:
+              const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit_outlined, color: Color(0xFF6C63FF), size: 22),
+            icon: const Icon(Icons.edit_outlined,
+                color: Color(0xFF6C63FF), size: 22),
             tooltip: 'Rename',
             onPressed: _showRenameDialog,
           ),
@@ -185,7 +228,8 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                       ),
                       Expanded(
                         child: ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          padding:
+                              const EdgeInsets.fromLTRB(16, 0, 16, 8),
                           itemCount: logs.length,
                           itemBuilder: (context, index) => _WorkoutLogCard(
                             log: logs[index],
@@ -225,8 +269,10 @@ class _WorkoutLogCard extends StatelessWidget {
   bool get _isTimeBased => exerciseType == ExerciseType.timeBased;
 
   String _formatDate(DateTime d) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
     return '${months[d.month - 1]} ${d.day}, ${d.year}';
   }
 
