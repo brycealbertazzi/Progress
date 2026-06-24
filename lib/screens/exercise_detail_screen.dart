@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/exercise.dart';
+import '../models/exercise_type.dart';
 import '../models/workout_log.dart';
 import '../widgets/add_log_sheet.dart';
 import '../widgets/volume_chart_sheet.dart';
@@ -86,7 +87,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const AddLogSheet(),
+      builder: (_) => AddLogSheet(exerciseType: widget.exercise.exerciseType),
     ).then((log) {
       if (log == null) return;
       setState(() => widget.exercise.logs.add(log));
@@ -98,7 +99,10 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddLogSheet(initialLog: original),
+      builder: (_) => AddLogSheet(
+        exerciseType: widget.exercise.exerciseType,
+        initialLog: original,
+      ),
     ).then((updated) {
       if (updated == null) return;
       setState(() {
@@ -141,20 +145,12 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
           ),
         ),
         leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Colors.white,
-            size: 20,
-          ),
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
-            icon: const Icon(
-              Icons.edit_outlined,
-              color: Color(0xFF6C63FF),
-              size: 22,
-            ),
+            icon: const Icon(Icons.edit_outlined, color: Color(0xFF6C63FF), size: 22),
             tooltip: 'Rename',
             onPressed: _showRenameDialog,
           ),
@@ -193,6 +189,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                           itemCount: logs.length,
                           itemBuilder: (context, index) => _WorkoutLogCard(
                             log: logs[index],
+                            exerciseType: widget.exercise.exerciseType,
                             onTap: () => _editLog(logs[index]),
                           ),
                         ),
@@ -215,37 +212,42 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
 }
 
 class _WorkoutLogCard extends StatelessWidget {
-  const _WorkoutLogCard({required this.log, required this.onTap});
+  const _WorkoutLogCard({
+    required this.log,
+    required this.exerciseType,
+    required this.onTap,
+  });
 
   final WorkoutLog log;
+  final ExerciseType exerciseType;
   final VoidCallback onTap;
 
+  bool get _isTimeBased => exerciseType == ExerciseType.timeBased;
+
   String _formatDate(DateTime d) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return '${months[d.month - 1]} ${d.day}, ${d.year}';
   }
 
-  String _formatVolume(double v) {
-    final n = v.toInt();
+  String _primaryValue() {
+    if (_isTimeBased) return _formatTime(log.totalTime ?? 0);
+    final n = log.volume.toInt();
     if (n >= 1000) {
-      final t = n ~/ 1000;
-      final r = (n % 1000).toString().padLeft(3, '0');
-      return '$t,$r lbs';
+      return '${n ~/ 1000},${(n % 1000).toString().padLeft(3, '0')} lbs';
     }
     return '$n lbs';
+  }
+
+  String _secondaryValue() {
+    if (_isTimeBased) return '${log.sets} sets';
+    return '${log.totalReps} total reps';
+  }
+
+  String _formatTime(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -274,7 +276,7 @@ class _WorkoutLogCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  _formatVolume(log.volume),
+                  _primaryValue(),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 15,
@@ -283,7 +285,7 @@ class _WorkoutLogCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${log.totalReps} total reps',
+                  _secondaryValue(),
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.45),
                     fontSize: 12,

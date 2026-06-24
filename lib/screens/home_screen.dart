@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/exercise.dart';
+import '../models/exercise_type.dart';
 import '../models/workout_log.dart';
 import '../widgets/create_exercise_sheet.dart';
 import 'exercise_detail_screen.dart';
@@ -17,6 +18,7 @@ class _HomeScreenState extends State<HomeScreen> {
       id: '1',
       name: 'Bench Press',
       muscleGroup: 'Chest',
+      exerciseType: ExerciseType.repBased,
       logs: [
         WorkoutLog(date: DateTime(2026, 5, 5),  weight: 135, totalReps: 30, sets: 3),
         WorkoutLog(date: DateTime(2026, 5, 8),  weight: 140, totalReps: 24, sets: 3),
@@ -38,6 +40,7 @@ class _HomeScreenState extends State<HomeScreen> {
       id: '2',
       name: 'Squat',
       muscleGroup: 'Legs',
+      exerciseType: ExerciseType.repBased,
       logs: [
         WorkoutLog(date: DateTime(2026, 5, 6),  weight: 185, totalReps: 15, sets: 3),
         WorkoutLog(date: DateTime(2026, 5, 10), weight: 195, totalReps: 15, sets: 3),
@@ -59,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
       id: '3',
       name: 'Deadlift',
       muscleGroup: 'Back',
+      exerciseType: ExerciseType.repBased,
       logs: [
         WorkoutLog(date: DateTime(2026, 5, 7),  weight: 225, totalReps: 15, sets: 3),
         WorkoutLog(date: DateTime(2026, 5, 14), weight: 235, totalReps: 15, sets: 3),
@@ -67,6 +71,45 @@ class _HomeScreenState extends State<HomeScreen> {
         WorkoutLog(date: DateTime(2026, 6, 4),  weight: 265, totalReps: 15, sets: 3),
         WorkoutLog(date: DateTime(2026, 6, 11), weight: 275, totalReps: 15, sets: 3),
         WorkoutLog(date: DateTime(2026, 6, 18), weight: 285, totalReps: 15, sets: 3),
+      ],
+    ),
+    Exercise(
+      id: '4',
+      name: 'Deadhang',
+      muscleGroup: 'Grip',
+      exerciseType: ExerciseType.timeBased,
+      logs: [
+        WorkoutLog(date: DateTime(2026, 5, 10), totalTime: 45, sets: 3),
+        WorkoutLog(date: DateTime(2026, 5, 14), totalTime: 50, sets: 3),
+        WorkoutLog(date: DateTime(2026, 5, 18), totalTime: 55, sets: 3),
+        WorkoutLog(date: DateTime(2026, 5, 22), totalTime: 60, sets: 3),
+        WorkoutLog(date: DateTime(2026, 5, 26), totalTime: 65, sets: 3),
+        WorkoutLog(date: DateTime(2026, 5, 30), totalTime: 70, sets: 3),
+        WorkoutLog(date: DateTime(2026, 6, 3),  totalTime: 75, sets: 3),
+        WorkoutLog(date: DateTime(2026, 6, 7),  totalTime: 80, sets: 3),
+        WorkoutLog(date: DateTime(2026, 6, 11), totalTime: 82, sets: 3),
+        WorkoutLog(date: DateTime(2026, 6, 15), totalTime: 85, sets: 3),
+        WorkoutLog(date: DateTime(2026, 6, 19), totalTime: 88, sets: 3),
+      ],
+    ),
+    Exercise(
+      id: '5',
+      name: 'Plank',
+      muscleGroup: 'Core',
+      exerciseType: ExerciseType.timeBased,
+      logs: [
+        WorkoutLog(date: DateTime(2026, 5, 8),  totalTime: 60,  sets: 3),
+        WorkoutLog(date: DateTime(2026, 5, 12), totalTime: 65,  sets: 3),
+        WorkoutLog(date: DateTime(2026, 5, 16), totalTime: 70,  sets: 3),
+        WorkoutLog(date: DateTime(2026, 5, 20), totalTime: 75,  sets: 3),
+        WorkoutLog(date: DateTime(2026, 5, 24), totalTime: 80,  sets: 3),
+        WorkoutLog(date: DateTime(2026, 5, 28), totalTime: 85,  sets: 3),
+        WorkoutLog(date: DateTime(2026, 6, 1),  totalTime: 90,  sets: 3),
+        WorkoutLog(date: DateTime(2026, 6, 5),  totalTime: 95,  sets: 3),
+        WorkoutLog(date: DateTime(2026, 6, 9),  totalTime: 100, sets: 3),
+        WorkoutLog(date: DateTime(2026, 6, 13), totalTime: 105, sets: 3),
+        WorkoutLog(date: DateTime(2026, 6, 17), totalTime: 110, sets: 3),
+        WorkoutLog(date: DateTime(2026, 6, 21), totalTime: 115, sets: 3),
       ],
     ),
   ];
@@ -81,17 +124,18 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showCreateSheet() {
-    showModalBottomSheet<String>(
+    showModalBottomSheet<({String name, ExerciseType exerciseType})>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => const CreateExerciseSheet(),
-    ).then((name) {
-      if (name == null || name.isEmpty) return;
+    ).then((result) {
+      if (result == null) return;
       final exercise = Exercise(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
-        name: name,
+        name: result.name,
         muscleGroup: '',
+        exerciseType: result.exerciseType,
         logs: [],
       );
       setState(() => _exercises.add(exercise));
@@ -152,9 +196,11 @@ class _ExerciseCard extends StatelessWidget {
                   color: const Color(0xFF6C63FF).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(
-                  Icons.fitness_center,
-                  color: Color(0xFF6C63FF),
+                child: Icon(
+                  exercise.exerciseType == ExerciseType.timeBased
+                      ? Icons.timer_outlined
+                      : Icons.fitness_center,
+                  color: const Color(0xFF6C63FF),
                   size: 22,
                 ),
               ),

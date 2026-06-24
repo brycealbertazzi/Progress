@@ -3,13 +3,16 @@ class WorkoutLog {
   final double weight;
   final int totalReps;
   final int sets;
+  final int? totalTime; // seconds — time-based exercises only
 
   const WorkoutLog({
     required this.date,
-    required this.weight,
-    required this.totalReps,
+    this.weight = 0,
+    this.totalReps = 0,
     required this.sets,
+    this.totalTime,
   });
 
-  double get volume => weight * totalReps;
+  double get volume =>
+      totalTime != null ? totalTime!.toDouble() : weight * totalReps;
 }

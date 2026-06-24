@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../models/exercise_type.dart';
 import '../models/workout_log.dart';
 
 class AddLogSheet extends StatefulWidget {
-  const AddLogSheet({super.key, this.initialLog});
+  const AddLogSheet({super.key, required this.exerciseType, this.initialLog});
 
+  final ExerciseType exerciseType;
   final WorkoutLog? initialLog;
 
   @override
@@ -14,10 +16,12 @@ class AddLogSheet extends StatefulWidget {
 class _AddLogSheetState extends State<AddLogSheet> {
   late final TextEditingController _weightController;
   late final TextEditingController _totalRepsController;
+  late final TextEditingController _timeController;
   late final TextEditingController _setsController;
   late bool _canLog;
 
   bool get _isEditing => widget.initialLog != null;
+  bool get _isTimeBased => widget.exerciseType == ExerciseType.timeBased;
 
   @override
   void initState() {
@@ -29,48 +33,72 @@ class _AddLogSheetState extends State<AddLogSheet> {
     _totalRepsController = TextEditingController(
       text: log != null ? '${log.totalReps}' : '',
     );
+    _timeController = TextEditingController(
+      text: log?.totalTime != null ? '${log!.totalTime}' : '',
+    );
     _setsController = TextEditingController(
       text: log != null ? '${log.sets}' : '',
     );
     _canLog = log != null;
-    for (final c in [_weightController, _totalRepsController, _setsController]) {
+    for (final c in _activeControllers) {
       c.addListener(_onChanged);
     }
   }
 
-  String _stripTrailingZero(double v) =>
-      v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
+  List<TextEditingController> get _activeControllers => _isTimeBased
+      ? [_timeController, _setsController]
+      : [_weightController, _totalRepsController, _setsController];
 
   @override
   void dispose() {
-    for (final c in [_weightController, _totalRepsController, _setsController]) {
+    for (final c in [
+      _weightController,
+      _totalRepsController,
+      _timeController,
+      _setsController,
+    ]) {
       c.dispose();
     }
     super.dispose();
   }
 
   void _onChanged() {
-    final can = _weightController.text.trim().isNotEmpty &&
-        _totalRepsController.text.trim().isNotEmpty &&
-        _setsController.text.trim().isNotEmpty;
+    final can = _activeControllers.every((c) => c.text.trim().isNotEmpty);
     if (can != _canLog) setState(() => _canLog = can);
   }
 
+  String _stripTrailingZero(double v) =>
+      v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
+
   void _submit() {
-    final weight = double.tryParse(_weightController.text.trim());
-    final totalReps = int.tryParse(_totalRepsController.text.trim());
-    final sets = int.tryParse(_setsController.text.trim());
-    if (weight == null || totalReps == null || sets == null) return;
-    if (weight <= 0 || totalReps <= 0 || sets <= 0) return;
-    Navigator.pop(
-      context,
-      WorkoutLog(
-        date: widget.initialLog?.date ?? DateTime.now(),
-        weight: weight,
-        totalReps: totalReps,
-        sets: sets,
-      ),
-    );
+    if (_isTimeBased) {
+      final totalTime = int.tryParse(_timeController.text.trim());
+      final sets = int.tryParse(_setsController.text.trim());
+      if (totalTime == null || sets == null || totalTime <= 0 || sets <= 0) return;
+      Navigator.pop(
+        context,
+        WorkoutLog(
+          date: widget.initialLog?.date ?? DateTime.now(),
+          totalTime: totalTime,
+          sets: sets,
+        ),
+      );
+    } else {
+      final weight = double.tryParse(_weightController.text.trim());
+      final totalReps = int.tryParse(_totalRepsController.text.trim());
+      final sets = int.tryParse(_setsController.text.trim());
+      if (weight == null || totalReps == null || sets == null) return;
+      if (weight <= 0 || totalReps <= 0 || sets <= 0) return;
+      Navigator.pop(
+        context,
+        WorkoutLog(
+          date: widget.initialLog?.date ?? DateTime.now(),
+          weight: weight,
+          totalReps: totalReps,
+          sets: sets,
+        ),
+      );
+    }
   }
 
   @override
@@ -107,41 +135,67 @@ class _AddLogSheetState extends State<AddLogSheet> {
             ),
           ),
           const SizedBox(height: 28),
-          Row(
-            children: [
-              Expanded(
-                flex: 5,
-                child: _InputField(
-                  label: 'WEIGHT',
-                  hint: '0',
-                  suffix: 'lbs',
-                  controller: _weightController,
-                  decimal: true,
-                  onSubmitted: (_) => _submit(),
+          if (_isTimeBased)
+            Row(
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: _InputField(
+                    label: 'TOTAL TIME',
+                    hint: '0',
+                    suffix: 'sec',
+                    controller: _timeController,
+                    onSubmitted: (_) => _submit(),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 3,
-                child: _InputField(
-                  label: 'TOTAL REPS',
-                  hint: '0',
-                  controller: _totalRepsController,
-                  onSubmitted: (_) => _submit(),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 3,
+                  child: _InputField(
+                    label: 'SETS',
+                    hint: '0',
+                    controller: _setsController,
+                    onSubmitted: (_) => _submit(),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 3,
-                child: _InputField(
-                  label: 'SETS',
-                  hint: '0',
-                  controller: _setsController,
-                  onSubmitted: (_) => _submit(),
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: _InputField(
+                    label: 'WEIGHT',
+                    hint: '0',
+                    suffix: 'lbs',
+                    controller: _weightController,
+                    decimal: true,
+                    onSubmitted: (_) => _submit(),
+                  ),
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 3,
+                  child: _InputField(
+                    label: 'TOTAL REPS',
+                    hint: '0',
+                    controller: _totalRepsController,
+                    onSubmitted: (_) => _submit(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 3,
+                  child: _InputField(
+                    label: 'SETS',
+                    hint: '0',
+                    controller: _setsController,
+                    onSubmitted: (_) => _submit(),
+                  ),
+                ),
+              ],
+            ),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,

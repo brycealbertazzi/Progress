@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/exercise_type.dart';
 
 class CreateExerciseSheet extends StatefulWidget {
   const CreateExerciseSheet({super.key});
@@ -9,6 +10,7 @@ class CreateExerciseSheet extends StatefulWidget {
 
 class _CreateExerciseSheetState extends State<CreateExerciseSheet> {
   final _controller = TextEditingController();
+  ExerciseType _type = ExerciseType.repBased;
   bool _canCreate = false;
 
   @override
@@ -28,7 +30,9 @@ class _CreateExerciseSheetState extends State<CreateExerciseSheet> {
 
   void _submit() {
     final name = _controller.text.trim();
-    if (name.isNotEmpty) Navigator.pop(context, name);
+    if (name.isNotEmpty) {
+      Navigator.pop(context, (name: name, exerciseType: _type));
+    }
   }
 
   @override
@@ -64,7 +68,7 @@ class _CreateExerciseSheetState extends State<CreateExerciseSheet> {
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
           TextField(
             controller: _controller,
             autofocus: true,
@@ -96,6 +100,11 @@ class _CreateExerciseSheetState extends State<CreateExerciseSheet> {
             ),
           ),
           const SizedBox(height: 20),
+          _TypeToggle(
+            selected: _type,
+            onChanged: (t) => setState(() => _type = t),
+          ),
+          const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: AnimatedOpacity(
@@ -121,6 +130,87 @@ class _CreateExerciseSheetState extends State<CreateExerciseSheet> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TypeToggle extends StatelessWidget {
+  const _TypeToggle({required this.selected, required this.onChanged});
+
+  final ExerciseType selected;
+  final ValueChanged<ExerciseType> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'TYPE',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.45),
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.8,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF2A2A2A),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          padding: const EdgeInsets.all(3),
+          child: Row(
+            children: [
+              _Pill(
+                label: 'Rep Based',
+                active: selected == ExerciseType.repBased,
+                onTap: () => onChanged(ExerciseType.repBased),
+              ),
+              _Pill(
+                label: 'Time Based',
+                active: selected == ExerciseType.timeBased,
+                onTap: () => onChanged(ExerciseType.timeBased),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  const _Pill({required this.label, required this.active, required this.onTap});
+
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: active ? const Color(0xFF6C63FF) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: active ? Colors.white : Colors.white.withValues(alpha: 0.45),
+              fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+              fontSize: 14,
+            ),
+          ),
+        ),
       ),
     );
   }

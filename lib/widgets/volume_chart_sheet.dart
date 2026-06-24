@@ -1,12 +1,15 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import '../models/exercise.dart';
+import '../models/exercise_type.dart';
 import '../models/workout_log.dart';
 
 class VolumeChartSheet extends StatelessWidget {
   const VolumeChartSheet({super.key, required this.exercise});
 
   final Exercise exercise;
+
+  bool get _isTimeBased => exercise.exerciseType == ExerciseType.timeBased;
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +45,7 @@ class VolumeChartSheet extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Total Volume (lbs)',
+            _isTimeBased ? 'Total Duration (sec)' : 'Total Volume (lbs)',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.45),
               fontSize: 13,
@@ -122,7 +125,7 @@ class VolumeChartSheet extends StatelessWidget {
               getTitlesWidget: (value, meta) => Padding(
                 padding: const EdgeInsets.only(right: 6),
                 child: Text(
-                  _formatVolume(value),
+                  _formatY(value),
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.4),
                     fontSize: 11,
@@ -170,6 +173,9 @@ class VolumeChartSheet extends StatelessWidget {
             getTooltipColor: (_) => const Color(0xFF2C2C3E),
             getTooltipItems: (spots) => spots.map((s) {
               final log = logs[s.x.toInt()];
+              final valueLabel = _isTimeBased
+                  ? _formatTime(s.y.toInt())
+                  : '${_formatY(s.y)} lbs';
               return LineTooltipItem(
                 '${_formatDate(log.date)}\n',
                 const TextStyle(
@@ -179,7 +185,7 @@ class VolumeChartSheet extends StatelessWidget {
                 ),
                 children: [
                   TextSpan(
-                    text: '${_formatVolume(s.y)} lbs',
+                    text: valueLabel,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 13,
@@ -203,15 +209,28 @@ class VolumeChartSheet extends StatelessWidget {
 
   double _niceInterval(double min, double max) {
     final range = (max - min).abs();
+    if (_isTimeBased) {
+      if (range <= 0) return 15;
+      final rough = range / 4;
+      const steps = [5.0, 10.0, 15.0, 30.0, 60.0, 120.0, 300.0];
+      return steps.firstWhere((s) => s >= rough, orElse: () => 300);
+    }
     if (range <= 0) return 500;
     final rough = range / 4;
     const steps = [100.0, 200.0, 250.0, 500.0, 1000.0, 2000.0, 2500.0, 5000.0];
     return steps.firstWhere((s) => s >= rough, orElse: () => 5000);
   }
 
-  String _formatVolume(double v) {
+  String _formatY(double v) {
+    if (_isTimeBased) return _formatTime(v.toInt());
     if (v >= 1000) return '${(v / 1000).toStringAsFixed(v % 1000 == 0 ? 0 : 1)}k';
     return v.toInt().toString();
+  }
+
+  String _formatTime(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
   }
 
   String _formatDate(DateTime d) {
