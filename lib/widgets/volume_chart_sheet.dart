@@ -191,9 +191,9 @@ class VolumeChartSheet extends StatelessWidget {
             getTooltipColor: (_) => const Color(0xFF2C2C3E),
             getTooltipItems: (spots) => spots.map((s) {
               final day = daily[s.x.toInt()];
-              final valueLabel = _isTimeBased
+              final valueLabel = (_isTimeBased && _isBodyweight)
                   ? _formatTime(s.y.toInt())
-                  : '${_formatY(s.y)} lbs';
+                  : '${_formatY(s.y)} $_volumeUnit';
               return LineTooltipItem(
                 '${_formatDate(day.date)}\n',
                 const TextStyle(
@@ -227,7 +227,7 @@ class VolumeChartSheet extends StatelessWidget {
 
   double _niceInterval(double min, double max) {
     final range = (max - min).abs();
-    if (_isTimeBased) {
+    if (_isTimeBased && _isBodyweight) {
       if (range <= 0) return 15;
       final rough = range / 4;
       const steps = [5.0, 10.0, 15.0, 30.0, 60.0, 120.0, 300.0];
@@ -240,7 +240,7 @@ class VolumeChartSheet extends StatelessWidget {
   }
 
   String _formatY(double v) {
-    if (_isTimeBased) return _formatTime(v.toInt());
+    if (_isTimeBased && _isBodyweight) return _formatTime(v.toInt());
     if (v >= 1000) return '${(v / 1000).toStringAsFixed(v % 1000 == 0 ? 0 : 1)}k';
     return v.toInt().toString();
   }

@@ -3,7 +3,6 @@ class WorkoutLog {
   final DateTime date;
   final double weight;
   final int totalReps;
-  final int sets;
   final int? totalTime; // seconds — time-based exercises only
 
   const WorkoutLog({
@@ -11,7 +10,6 @@ class WorkoutLog {
     required this.date,
     this.weight = 0,
     this.totalReps = 0,
-    required this.sets,
     this.totalTime,
   });
 
@@ -27,7 +25,6 @@ class WorkoutLog {
         date: DateTime.parse(json['date'] as String),
         weight: (json['weight'] as num?)?.toDouble() ?? 0.0,
         totalReps: (json['total_reps'] as int?) ?? 0,
-        sets: (json['sets'] as int?) ?? 0,
         totalTime: json['total_time'] as int?,
       );
 
@@ -37,7 +34,6 @@ class WorkoutLog {
         'date': _dateString(date),
         'weight': weight,
         'total_reps': totalReps,
-        'sets': sets,
         if (totalTime != null) 'total_time': totalTime,
       };
 
@@ -45,7 +41,6 @@ class WorkoutLog {
         'date': _dateString(date),
         'weight': weight,
         'total_reps': totalReps,
-        'sets': sets,
         'total_time': totalTime,
       };
 
@@ -54,7 +49,6 @@ class WorkoutLog {
         date: date,
         weight: weight,
         totalReps: totalReps,
-        sets: sets,
         totalTime: totalTime,
       );
 

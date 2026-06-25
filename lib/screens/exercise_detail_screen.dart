@@ -314,10 +314,7 @@ class _WorkoutLogCardContent extends StatelessWidget {
     if (_isTimeBased && !isBodyweightOnly) {
       return '${_stripTrailingZero(log.weight)} lbs · ${_formatTime(log.totalTime ?? 0)}';
     }
-    if (!isBodyweightOnly) {
-      return '${_stripTrailingZero(log.weight)} lbs · ${log.totalReps} reps';
-    }
-    return '${log.sets} sets';
+    return '${_stripTrailingZero(log.weight)} lbs · ${log.totalReps} reps';
   }
 
   String _formatNumber(int n) =>
