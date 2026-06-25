@@ -10,6 +10,12 @@ class VolumeChartSheet extends StatelessWidget {
   final Exercise exercise;
 
   bool get _isTimeBased => exercise.exerciseType == ExerciseType.timeBased;
+  bool get _isBodyweight => exercise.isBodyweightOnly;
+
+  String get _volumeUnit {
+    if (_isTimeBased) return _isBodyweight ? 's' : 'lbs·s';
+    return _isBodyweight ? 'reps' : 'lbs·reps';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +51,7 @@ class VolumeChartSheet extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            _isTimeBased ? 'Total Duration (sec)' : 'Total Volume (lbs)',
+            'Volume ($_volumeUnit)',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.45),
               fontSize: 13,

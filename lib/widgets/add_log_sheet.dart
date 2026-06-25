@@ -53,8 +53,10 @@ class _AddLogSheetState extends State<AddLogSheet> {
   }
 
   List<TextEditingController> get _activeControllers {
-    if (_isTimeBased && _isBodyweight) return [_timeController, _setsController];
-    if (_isTimeBased) return [_weightController, _timeController, _setsController];
+    if (_isTimeBased && _isBodyweight)
+      return [_timeController, _setsController];
+    if (_isTimeBased)
+      return [_weightController, _timeController, _setsController];
     if (_isBodyweight) return [_totalRepsController, _setsController];
     return [_weightController, _totalRepsController, _setsController];
   }
@@ -84,7 +86,8 @@ class _AddLogSheetState extends State<AddLogSheet> {
     if (_isTimeBased && _isBodyweight) {
       final totalTime = int.tryParse(_timeController.text.trim());
       final sets = int.tryParse(_setsController.text.trim());
-      if (totalTime == null || sets == null || totalTime <= 0 || sets <= 0) return;
+      if (totalTime == null || sets == null || totalTime <= 0 || sets <= 0)
+        return;
       Navigator.pop(
         context,
         WorkoutLog(
@@ -112,7 +115,8 @@ class _AddLogSheetState extends State<AddLogSheet> {
     } else if (_isBodyweight) {
       final totalReps = int.tryParse(_totalRepsController.text.trim());
       final sets = int.tryParse(_setsController.text.trim());
-      if (totalReps == null || sets == null || totalReps <= 0 || sets <= 0) return;
+      if (totalReps == null || sets == null || totalReps <= 0 || sets <= 0)
+        return;
       Navigator.pop(
         context,
         WorkoutLog(
@@ -180,9 +184,9 @@ class _AddLogSheetState extends State<AddLogSheet> {
                 Expanded(
                   flex: 5,
                   child: _InputField(
-                    label: 'TOTAL TIME',
+                    label: 'TOTAL TIME (s)',
                     hint: '0',
-                    suffix: 'sec',
+                    suffix: 's',
                     controller: _timeController,
                     onSubmitted: (_) => _submit(),
                   ),
@@ -205,7 +209,7 @@ class _AddLogSheetState extends State<AddLogSheet> {
                 Expanded(
                   flex: 4,
                   child: _InputField(
-                    label: 'WEIGHT',
+                    label: 'WEIGHT (lbs)',
                     hint: '0',
                     suffix: 'lbs',
                     controller: _weightController,
@@ -217,9 +221,9 @@ class _AddLogSheetState extends State<AddLogSheet> {
                 Expanded(
                   flex: 5,
                   child: _InputField(
-                    label: 'TOTAL TIME',
+                    label: 'TOTAL TIME (s)',
                     hint: '0',
-                    suffix: 'sec',
+                    suffix: 's',
                     controller: _timeController,
                     onSubmitted: (_) => _submit(),
                   ),
@@ -266,7 +270,7 @@ class _AddLogSheetState extends State<AddLogSheet> {
                 Expanded(
                   flex: 5,
                   child: _InputField(
-                    label: 'WEIGHT',
+                    label: 'WEIGHT (lbs)',
                     hint: '0',
                     suffix: 'lbs',
                     controller: _weightController,
@@ -316,7 +320,10 @@ class _AddLogSheetState extends State<AddLogSheet> {
                 ),
                 child: Text(
                   _isEditing ? 'Save Changes' : 'Log Workout',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
                 ),
               ),
             ),
@@ -391,8 +398,10 @@ class _InputField extends StatelessWidget {
             ),
             filled: true,
             fillColor: const Color(0xFF2A2A2A),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 14,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide.none,

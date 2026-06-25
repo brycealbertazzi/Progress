@@ -167,6 +167,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
       id: widget.exercise.id,
       name: _name,
       exerciseType: widget.exercise.exerciseType,
+      isBodyweightOnly: _isBodyweightOnly,
       logs: _logs,
     );
     showModalBottomSheet(
@@ -299,21 +300,28 @@ class _WorkoutLogCardContent extends StatelessWidget {
   bool get _isTimeBased => exerciseType == ExerciseType.timeBased;
 
   String _primaryValue() {
-    if (_isTimeBased) return _formatTime(log.totalTime ?? 0);
-    if (isBodyweightOnly) return '${log.totalReps} reps';
-    final n = log.volume.toInt();
-    if (n >= 1000) {
-      return '${n ~/ 1000},${(n % 1000).toString().padLeft(3, '0')} lbs';
+    if (_isTimeBased && !isBodyweightOnly) {
+      return '${_formatNumber(log.volume.toInt())} lbs·s';
     }
-    return '$n lbs';
+    if (_isTimeBased) return _formatTime(log.totalTime ?? 0);
+    if (!isBodyweightOnly) {
+      return '${_formatNumber(log.volume.toInt())} lbs·reps';
+    }
+    return '${log.totalReps} reps';
   }
 
   String _secondaryValue() {
-    if (_isTimeBased && !isBodyweightOnly && log.weight > 0) {
-      return '${_stripTrailingZero(log.weight)} lbs · ${log.sets} sets';
+    if (_isTimeBased && !isBodyweightOnly) {
+      return '${_stripTrailingZero(log.weight)} lbs · ${_formatTime(log.totalTime ?? 0)}';
+    }
+    if (!isBodyweightOnly) {
+      return '${_stripTrailingZero(log.weight)} lbs · ${log.totalReps} reps';
     }
     return '${log.sets} sets';
   }
+
+  String _formatNumber(int n) =>
+      n >= 1000 ? '${n ~/ 1000},${(n % 1000).toString().padLeft(3, '0')}' : '$n';
 
   String _stripTrailingZero(double v) =>
       v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
@@ -326,12 +334,11 @@ class _WorkoutLogCardContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
+    if (isBodyweightOnly) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Center(
+          child: Text(
             _primaryValue(),
             style: const TextStyle(
               color: Colors.white,
@@ -339,8 +346,25 @@ class _WorkoutLogCardContent extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
           Text(
             _secondaryValue(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          Text(
+            _primaryValue(),
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.45),
               fontSize: 13,
