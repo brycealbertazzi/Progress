@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../services/auth_service.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -9,23 +11,28 @@ class SignInScreen extends StatefulWidget {
 }
 
 class _SignInScreenState extends State<SignInScreen> {
-  bool _isLoading = false;
+  bool _googleLoading = false;
+  bool _appleLoading = false;
+
+  bool get _anyLoading => _googleLoading || _appleLoading;
 
   Future<void> _signInWithGoogle() async {
-    setState(() => _isLoading = true);
+    setState(() => _googleLoading = true);
     try {
       await AuthService.instance.signInWithGoogle();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Sign in failed: $e'),
-            backgroundColor: Colors.red[700],
-          ),
-        );
-      }
+    } catch (_) {
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _googleLoading = false);
+    }
+  }
+
+  Future<void> _signInWithApple() async {
+    setState(() => _appleLoading = true);
+    try {
+      await AuthService.instance.signInWithApple();
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _appleLoading = false);
     }
   }
 
@@ -71,9 +78,16 @@ class _SignInScreenState extends State<SignInScreen> {
                 ),
               ),
               const Spacer(flex: 3),
+              if (Platform.isIOS) ...[
+                _AppleSignInButton(
+                  isLoading: _appleLoading,
+                  onPressed: _anyLoading ? null : _signInWithApple,
+                ),
+                const SizedBox(height: 12),
+              ],
               _GoogleSignInButton(
-                isLoading: _isLoading,
-                onPressed: _isLoading ? null : _signInWithGoogle,
+                isLoading: _googleLoading,
+                onPressed: _anyLoading ? null : _signInWithGoogle,
               ),
               const SizedBox(height: 48),
             ],
@@ -149,6 +163,70 @@ class _GoogleG extends StatelessWidget {
         color: Color(0xFF4285F4),
         height: 1.1,
       ),
+    );
+  }
+}
+
+class _AppleSignInButton extends StatelessWidget {
+  const _AppleSignInButton({required this.isLoading, required this.onPressed});
+
+  final bool isLoading;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: AnimatedOpacity(
+        opacity: onPressed == null ? 0.6 : 1.0,
+        duration: const Duration(milliseconds: 150),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 17),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: isLoading
+              ? const Center(
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                  ),
+                )
+              : const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _AppleLogo(),
+                    SizedBox(width: 10),
+                    Text(
+                      'Continue with Apple',
+                      style: TextStyle(
+                        color: Color(0xFF1A1A1A),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AppleLogo extends StatelessWidget {
+  const _AppleLogo();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: const Size(17, 20),
+      painter: AppleLogoPainter(color: const Color(0xFF1A1A1A)),
     );
   }
 }
