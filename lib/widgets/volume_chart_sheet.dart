@@ -58,6 +58,16 @@ class VolumeChartSheet extends StatelessWidget {
     );
   }
 
+  List<({DateTime date, double volume})> _aggregateByDay(List<WorkoutLog> logs) {
+    final map = <String, ({DateTime date, double volume})>{};
+    for (final log in logs) {
+      final key = '${log.date.year}-${log.date.month.toString().padLeft(2, '0')}-${log.date.day.toString().padLeft(2, '0')}';
+      final current = map[key];
+      map[key] = (date: log.date, volume: (current?.volume ?? 0) + log.volume);
+    }
+    return map.values.toList()..sort((a, b) => a.date.compareTo(b.date));
+  }
+
   Widget _buildChart(List<WorkoutLog> logs) {
     if (logs.isEmpty) {
       return const Center(
@@ -68,20 +78,22 @@ class VolumeChartSheet extends StatelessWidget {
       );
     }
 
-    final spots = logs
+    final daily = _aggregateByDay(logs);
+
+    final spots = daily
         .asMap()
         .entries
         .map((e) => FlSpot(e.key.toDouble(), e.value.volume))
         .toList();
 
-    final maxY = logs.map((l) => l.volume).reduce((a, b) => a > b ? a : b);
-    final minY = logs.map((l) => l.volume).reduce((a, b) => a < b ? a : b);
+    final maxY = daily.map((d) => d.volume).reduce((a, b) => a > b ? a : b);
+    final minY = daily.map((d) => d.volume).reduce((a, b) => a < b ? a : b);
     final yPadding = (maxY - minY) * 0.2;
 
     return LineChart(
       LineChartData(
         minX: 0,
-        maxX: (logs.length - 1).toDouble(),
+        maxX: (daily.length - 1).toDouble(),
         minY: (minY - yPadding).clamp(0, double.infinity),
         maxY: maxY + yPadding,
         lineBarsData: [
@@ -139,11 +151,11 @@ class VolumeChartSheet extends StatelessWidget {
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 28,
-              interval: _xLabelInterval(logs.length),
+              interval: _xLabelInterval(daily.length),
               getTitlesWidget: (value, meta) {
                 final index = value.toInt();
-                if (index < 0 || index >= logs.length) return const SizedBox.shrink();
-                final date = logs[index].date;
+                if (index < 0 || index >= daily.length) return const SizedBox.shrink();
+                final date = daily[index].date;
                 return Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
@@ -172,12 +184,12 @@ class VolumeChartSheet extends StatelessWidget {
           touchTooltipData: LineTouchTooltipData(
             getTooltipColor: (_) => const Color(0xFF2C2C3E),
             getTooltipItems: (spots) => spots.map((s) {
-              final log = logs[s.x.toInt()];
+              final day = daily[s.x.toInt()];
               final valueLabel = _isTimeBased
                   ? _formatTime(s.y.toInt())
                   : '${_formatY(s.y)} lbs';
               return LineTooltipItem(
-                '${_formatDate(log.date)}\n',
+                '${_formatDate(day.date)}\n',
                 const TextStyle(
                   color: Colors.white54,
                   fontSize: 11,

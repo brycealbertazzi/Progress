@@ -36,14 +36,14 @@ class DatabaseService {
 
   Future<Exercise> createExercise(
     String name,
-    String muscleGroup,
     ExerciseType type,
+    bool isBodyweightOnly,
     int orderIndex,
   ) async {
     final data = await _client.from('exercises').insert({
       'name': name,
-      'muscle_group': muscleGroup,
       'exercise_type': type == ExerciseType.timeBased ? 'timeBased' : 'repBased',
+      'is_bodyweight_only': isBodyweightOnly,
       'user_id': _uid,
       'order_index': orderIndex,
     }).select().single();
@@ -51,8 +51,12 @@ class DatabaseService {
     return Exercise.fromJson(data, []);
   }
 
-  Future<void> updateExerciseName(String id, String name) async {
-    await _client.from('exercises').update({'name': name}).eq('id', id);
+  Future<void> updateExercise(
+      String id, {required String name, required bool isBodyweightOnly}) async {
+    await _client.from('exercises').update({
+      'name': name,
+      'is_bodyweight_only': isBodyweightOnly,
+    }).eq('id', id);
   }
 
   Future<WorkoutLog> addLog(String exerciseId, WorkoutLog log) async {
@@ -69,5 +73,13 @@ class DatabaseService {
         .from('workout_logs')
         .update(log.toUpdateJson())
         .eq('id', log.id!);
+  }
+
+  Future<void> deleteExercise(String id) async {
+    await _client.from('exercises').delete().eq('id', id);
+  }
+
+  Future<void> deleteLog(String id) async {
+    await _client.from('workout_logs').delete().eq('id', id);
   }
 }

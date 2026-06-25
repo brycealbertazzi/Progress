@@ -4,9 +4,15 @@ import '../models/exercise_type.dart';
 import '../models/workout_log.dart';
 
 class AddLogSheet extends StatefulWidget {
-  const AddLogSheet({super.key, required this.exerciseType, this.initialLog});
+  const AddLogSheet({
+    super.key,
+    required this.exerciseType,
+    this.isBodyweightOnly = false,
+    this.initialLog,
+  });
 
   final ExerciseType exerciseType;
+  final bool isBodyweightOnly;
   final WorkoutLog? initialLog;
 
   @override
@@ -22,6 +28,7 @@ class _AddLogSheetState extends State<AddLogSheet> {
 
   bool get _isEditing => widget.initialLog != null;
   bool get _isTimeBased => widget.exerciseType == ExerciseType.timeBased;
+  bool get _isBodyweight => widget.isBodyweightOnly;
 
   @override
   void initState() {
@@ -45,9 +52,12 @@ class _AddLogSheetState extends State<AddLogSheet> {
     }
   }
 
-  List<TextEditingController> get _activeControllers => _isTimeBased
-      ? [_timeController, _setsController]
-      : [_weightController, _totalRepsController, _setsController];
+  List<TextEditingController> get _activeControllers {
+    if (_isTimeBased && _isBodyweight) return [_timeController, _setsController];
+    if (_isTimeBased) return [_weightController, _timeController, _setsController];
+    if (_isBodyweight) return [_totalRepsController, _setsController];
+    return [_weightController, _totalRepsController, _setsController];
+  }
 
   @override
   void dispose() {
@@ -71,7 +81,7 @@ class _AddLogSheetState extends State<AddLogSheet> {
       v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
 
   void _submit() {
-    if (_isTimeBased) {
+    if (_isTimeBased && _isBodyweight) {
       final totalTime = int.tryParse(_timeController.text.trim());
       final sets = int.tryParse(_setsController.text.trim());
       if (totalTime == null || sets == null || totalTime <= 0 || sets <= 0) return;
@@ -79,7 +89,36 @@ class _AddLogSheetState extends State<AddLogSheet> {
         context,
         WorkoutLog(
           date: widget.initialLog?.date ?? DateTime.now(),
+          weight: 0,
           totalTime: totalTime,
+          sets: sets,
+        ),
+      );
+    } else if (_isTimeBased) {
+      final weight = double.tryParse(_weightController.text.trim());
+      final totalTime = int.tryParse(_timeController.text.trim());
+      final sets = int.tryParse(_setsController.text.trim());
+      if (weight == null || totalTime == null || sets == null) return;
+      if (weight <= 0 || totalTime <= 0 || sets <= 0) return;
+      Navigator.pop(
+        context,
+        WorkoutLog(
+          date: widget.initialLog?.date ?? DateTime.now(),
+          weight: weight,
+          totalTime: totalTime,
+          sets: sets,
+        ),
+      );
+    } else if (_isBodyweight) {
+      final totalReps = int.tryParse(_totalRepsController.text.trim());
+      final sets = int.tryParse(_setsController.text.trim());
+      if (totalReps == null || sets == null || totalReps <= 0 || sets <= 0) return;
+      Navigator.pop(
+        context,
+        WorkoutLog(
+          date: widget.initialLog?.date ?? DateTime.now(),
+          weight: 0,
+          totalReps: totalReps,
           sets: sets,
         ),
       );
@@ -135,7 +174,7 @@ class _AddLogSheetState extends State<AddLogSheet> {
             ),
           ),
           const SizedBox(height: 28),
-          if (_isTimeBased)
+          if (_isTimeBased && _isBodyweight)
             Row(
               children: [
                 Expanded(
@@ -145,6 +184,67 @@ class _AddLogSheetState extends State<AddLogSheet> {
                     hint: '0',
                     suffix: 'sec',
                     controller: _timeController,
+                    onSubmitted: (_) => _submit(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 3,
+                  child: _InputField(
+                    label: 'SETS',
+                    hint: '0',
+                    controller: _setsController,
+                    onSubmitted: (_) => _submit(),
+                  ),
+                ),
+              ],
+            )
+          else if (_isTimeBased)
+            Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: _InputField(
+                    label: 'WEIGHT',
+                    hint: '0',
+                    suffix: 'lbs',
+                    controller: _weightController,
+                    decimal: true,
+                    onSubmitted: (_) => _submit(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 5,
+                  child: _InputField(
+                    label: 'TOTAL TIME',
+                    hint: '0',
+                    suffix: 'sec',
+                    controller: _timeController,
+                    onSubmitted: (_) => _submit(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 3,
+                  child: _InputField(
+                    label: 'SETS',
+                    hint: '0',
+                    controller: _setsController,
+                    onSubmitted: (_) => _submit(),
+                  ),
+                ),
+              ],
+            )
+          else if (_isBodyweight)
+            Row(
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: _InputField(
+                    label: 'TOTAL REPS',
+                    hint: '0',
+                    controller: _totalRepsController,
                     onSubmitted: (_) => _submit(),
                   ),
                 ),

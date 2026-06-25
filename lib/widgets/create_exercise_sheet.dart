@@ -11,6 +11,7 @@ class CreateExerciseSheet extends StatefulWidget {
 class _CreateExerciseSheetState extends State<CreateExerciseSheet> {
   final _controller = TextEditingController();
   ExerciseType _type = ExerciseType.repBased;
+  bool _isBodyweightOnly = false;
   bool _canCreate = false;
 
   @override
@@ -31,7 +32,11 @@ class _CreateExerciseSheetState extends State<CreateExerciseSheet> {
   void _submit() {
     final name = _controller.text.trim();
     if (name.isNotEmpty) {
-      Navigator.pop(context, (name: name, exerciseType: _type));
+      Navigator.pop(context, (
+        name: name,
+        exerciseType: _type,
+        isBodyweightOnly: _isBodyweightOnly,
+      ));
     }
   }
 
@@ -103,6 +108,11 @@ class _CreateExerciseSheetState extends State<CreateExerciseSheet> {
           _TypeToggle(
             selected: _type,
             onChanged: (t) => setState(() => _type = t),
+          ),
+          const SizedBox(height: 4),
+          _BodyweightRow(
+            value: _isBodyweightOnly,
+            onChanged: (v) => setState(() => _isBodyweightOnly = v),
           ),
           const SizedBox(height: 20),
           SizedBox(
@@ -178,6 +188,49 @@ class _TypeToggle extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _BodyweightRow extends StatelessWidget {
+  const _BodyweightRow({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 22,
+              height: 22,
+              child: Checkbox(
+                value: value,
+                onChanged: (v) => onChanged(v ?? false),
+                activeColor: const Color(0xFF6C63FF),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Bodyweight only',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.85),
+                fontSize: 15,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

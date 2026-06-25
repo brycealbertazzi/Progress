@@ -4,6 +4,7 @@ import 'config/app_config.dart';
 import 'services/auth_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/sign_in_screen.dart';
+import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,13 +32,13 @@ class ProgressApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF121212),
         useMaterial3: true,
       ),
-      home: const _AuthGate(),
+      home: const SplashScreen(),
     );
   }
 }
 
-class _AuthGate extends StatelessWidget {
-  const _AuthGate();
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
 
   @override
   Widget build(BuildContext context) {

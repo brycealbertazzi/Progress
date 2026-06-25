@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/exercise.dart';
 import '../models/exercise_type.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
+import '../widgets/bodyweight_badge.dart';
 import '../widgets/create_exercise_sheet.dart';
+import '../widgets/swipe_to_delete_card.dart';
 import 'exercise_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -53,7 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showCreateSheet() {
-    showModalBottomSheet<({String name, ExerciseType exerciseType})>(
+    showModalBottomSheet<({String name, ExerciseType exerciseType, bool isBodyweightOnly})>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -63,8 +66,8 @@ class _HomeScreenState extends State<HomeScreen> {
       try {
         final exercise = await DatabaseService.instance.createExercise(
           result.name,
-          '',
           result.exerciseType,
+          result.isBodyweightOnly,
           _exercises.length,
         );
         if (mounted) {
@@ -85,6 +88,22 @@ class _HomeScreenState extends State<HomeScreen> {
     await AuthService.instance.signOut();
   }
 
+  Widget _buildAvatar() {
+    final meta = Supabase.instance.client.auth.currentUser?.userMetadata;
+    final avatarUrl = meta?['avatar_url'] as String? ?? meta?['picture'] as String?;
+    return GestureDetector(
+      onTap: _signOut,
+      child: CircleAvatar(
+        radius: 16,
+        backgroundColor: const Color(0xFF6C63FF),
+        backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+        child: avatarUrl == null
+            ? const Icon(Icons.person, color: Colors.white, size: 18)
+            : null,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -93,27 +112,17 @@ class _HomeScreenState extends State<HomeScreen> {
           'Progress',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
         ),
+        centerTitle: true,
         backgroundColor: const Color(0xFF1A1A1A),
         surfaceTintColor: Colors.transparent,
         actions: [
-          IconButton(
-            icon: Icon(
-              Icons.logout_rounded,
-              color: Colors.white.withValues(alpha: 0.5),
-              size: 20,
-            ),
-            tooltip: 'Sign out',
-            onPressed: _signOut,
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: _buildAvatar(),
           ),
-          const SizedBox(width: 4),
         ],
       ),
       body: _buildBody(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showCreateSheet,
-        backgroundColor: const Color(0xFF6C63FF),
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
     );
   }
 
@@ -137,17 +146,13 @@ class _HomeScreenState extends State<HomeScreen> {
               Text(
                 'Failed to load exercises',
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.6),
-                  fontSize: 16,
-                ),
+                    color: Colors.white.withValues(alpha: 0.6), fontSize: 16),
               ),
               const SizedBox(height: 24),
               TextButton(
                 onPressed: _loadExercises,
-                child: const Text(
-                  'Retry',
-                  style: TextStyle(color: Color(0xFF6C63FF), fontSize: 15),
-                ),
+                child: const Text('Retry',
+                    style: TextStyle(color: Color(0xFF6C63FF), fontSize: 15)),
               ),
             ],
           ),
@@ -155,99 +160,148 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    if (_exercises.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.fitness_center,
-                  color: Colors.white.withValues(alpha: 0.2), size: 56),
-              const SizedBox(height: 16),
-              Text(
-                'No exercises yet',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  fontSize: 16,
+    return Column(
+      children: [
+        Expanded(
+          child: _exercises.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.fitness_center,
+                            color: Colors.white.withValues(alpha: 0.2),
+                            size: 56),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No exercises yet',
+                          style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.5),
+                              fontSize: 16),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Tap the button below to add your first exercise',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.3),
+                              fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : ListView.builder(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  itemCount: _exercises.length,
+                  itemBuilder: (context, index) {
+                    final exercise = _exercises[index];
+                    return SwipeToDeleteCard(
+                      key: ValueKey(exercise.id),
+                      onTap: () => _openDetail(exercise),
+                      onDeleteConfirmed: () {
+                        setState(() => _exercises.removeAt(index));
+                        DatabaseService.instance.deleteExercise(exercise.id);
+                      },
+                      deleteTitle: 'Delete Exercise',
+                      deleteMessage:
+                          'Delete "${exercise.name}" and all its logs?',
+                      bottomMargin: 12,
+                      child: _ExerciseCardContent(exercise: exercise),
+                    );
+                  },
                 ),
+        ),
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+              16, 8, 16, MediaQuery.of(context).padding.bottom + 16),
+          child: GestureDetector(
+            onTap: _showCreateSheet,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF6C63FF),
+                borderRadius: BorderRadius.circular(14),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Tap + to add your first exercise',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.3),
-                  fontSize: 13,
-                ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.add, color: Colors.white, size: 20),
+                  SizedBox(width: 6),
+                  Text(
+                    'Add Exercise',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      itemCount: _exercises.length,
-      itemBuilder: (context, index) => _ExerciseCard(
-        exercise: _exercises[index],
-        onTap: () => _openDetail(_exercises[index]),
-      ),
+      ],
     );
   }
 }
 
-class _ExerciseCard extends StatelessWidget {
-  const _ExerciseCard({required this.exercise, required this.onTap});
+class _ExerciseCardContent extends StatelessWidget {
+  const _ExerciseCardContent({required this.exercise});
 
   final Exercise exercise;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Card(
-        margin: const EdgeInsets.only(bottom: 12),
-        color: const Color(0xFF1E1E1E),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF6C63FF).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  exercise.exerciseType == ExerciseType.timeBased
-                      ? Icons.timer_outlined
-                      : Icons.fitness_center,
-                  color: const Color(0xFF6C63FF),
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  exercise.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFF6C63FF).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              exercise.exerciseType == ExerciseType.timeBased
+                  ? Icons.timer_outlined
+                  : Icons.fitness_center,
+              color: const Color(0xFF6C63FF),
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    exercise.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
-              ),
-              Icon(
-                Icons.chevron_right,
-                color: Colors.white.withValues(alpha: 0.3),
-              ),
-            ],
+                if (exercise.isBodyweightOnly) ...[
+                  const SizedBox(width: 8),
+                  BodyweightBadge(
+                    size: 16,
+                    color: Colors.white.withValues(alpha: 0.5),
+                  ),
+                ],
+              ],
+            ),
           ),
-        ),
+          Icon(Icons.chevron_right,
+              color: Colors.white.withValues(alpha: 0.3)),
+        ],
       ),
     );
   }

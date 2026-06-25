@@ -15,8 +15,12 @@ class WorkoutLog {
     this.totalTime,
   });
 
-  double get volume =>
-      totalTime != null ? totalTime!.toDouble() : weight * totalReps;
+  double get volume {
+    if (totalTime != null) {
+      return weight > 0 ? weight * totalTime! : totalTime!.toDouble();
+    }
+    return weight > 0 ? weight * totalReps : totalReps.toDouble();
+  }
 
   factory WorkoutLog.fromJson(Map<String, dynamic> json) => WorkoutLog(
         id: json['id'] as String?,

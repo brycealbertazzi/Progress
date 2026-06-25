@@ -4,6 +4,8 @@ import '../models/exercise_type.dart';
 import '../models/workout_log.dart';
 import '../services/database_service.dart';
 import '../widgets/add_log_sheet.dart';
+import '../widgets/bodyweight_badge.dart';
+import '../widgets/swipe_to_delete_card.dart';
 import '../widgets/volume_chart_sheet.dart';
 
 class ExerciseDetailScreen extends StatefulWidget {
@@ -17,30 +19,41 @@ class ExerciseDetailScreen extends StatefulWidget {
 
 class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
   late String _name;
+  late bool _isBodyweightOnly;
   late List<WorkoutLog> _logs;
 
   @override
   void initState() {
     super.initState();
     _name = widget.exercise.name;
+    _isBodyweightOnly = widget.exercise.isBodyweightOnly;
     _logs = List.from(widget.exercise.logs);
   }
 
-  List<WorkoutLog> get _recentLogs {
+  String _dateKey(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  List<MapEntry<DateTime, List<WorkoutLog>>> get _groupedLogs {
     final sorted = [..._logs]..sort((a, b) => b.date.compareTo(a.date));
-    return sorted.take(10).toList();
+    final ordered = <String, MapEntry<DateTime, List<WorkoutLog>>>{};
+    for (final log in sorted) {
+      final key = _dateKey(log.date);
+      if (!ordered.containsKey(key)) {
+        ordered[key] = MapEntry(log.date, []);
+      }
+      ordered[key]!.value.add(log);
+    }
+    return ordered.values.toList();
   }
 
-  void _showRenameDialog() {
+  void _showEditDialog() {
     final controller = TextEditingController(text: _name);
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text(
-          'Rename Exercise',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text('Rename Exercise', style: TextStyle(color: Colors.white)),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -60,34 +73,34 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
-            ),
+            child: Text('Cancel',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.5))),
           ),
           TextButton(
             onPressed: () async {
               final trimmed = controller.text.trim();
               Navigator.pop(context);
               if (trimmed.isEmpty || trimmed == _name) return;
-              setState(() => _name = trimmed);
-              widget.exercise.name = trimmed;
+              setState(() {
+                _name = trimmed;
+                widget.exercise.name = trimmed;
+              });
               final messenger = ScaffoldMessenger.of(context);
               try {
-                await DatabaseService.instance
-                    .updateExerciseName(widget.exercise.id, trimmed);
+                await DatabaseService.instance.updateExercise(
+                  widget.exercise.id,
+                  name: trimmed,
+                  isBodyweightOnly: _isBodyweightOnly,
+                );
               } catch (e) {
                 if (mounted) {
                   messenger.showSnackBar(
-                    SnackBar(content: Text('Failed to rename: $e')),
-                  );
+                      SnackBar(content: Text('Failed to rename: $e')));
                 }
               }
             },
-            child: const Text(
-              'Save',
-              style: TextStyle(color: Color(0xFF6C63FF)),
-            ),
+            child: const Text('Save',
+                style: TextStyle(color: Color(0xFF6C63FF))),
           ),
         ],
       ),
@@ -99,7 +112,10 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddLogSheet(exerciseType: widget.exercise.exerciseType),
+      builder: (_) => AddLogSheet(
+        exerciseType: widget.exercise.exerciseType,
+        isBodyweightOnly: _isBodyweightOnly,
+      ),
     ).then((log) async {
       if (log == null) return;
       try {
@@ -123,6 +139,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => AddLogSheet(
         exerciseType: widget.exercise.exerciseType,
+        isBodyweightOnly: _isBodyweightOnly,
         initialLog: original,
       ),
     ).then((updated) async {
@@ -149,7 +166,6 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
     final exerciseForChart = Exercise(
       id: widget.exercise.id,
       name: _name,
-      muscleGroup: widget.exercise.muscleGroup,
       exerciseType: widget.exercise.exerciseType,
       logs: _logs,
     );
@@ -169,7 +185,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final logs = _recentLogs;
+    final groups = _groupedLogs;
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
@@ -177,13 +193,28 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
         backgroundColor: const Color(0xFF1A1A1A),
         surfaceTintColor: Colors.transparent,
         centerTitle: true,
-        title: Text(
-          _name,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                _name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (_isBodyweightOnly) ...[
+              const SizedBox(width: 8),
+              BodyweightBadge(
+                size: 18,
+                color: Colors.white.withValues(alpha: 0.6),
+              ),
+            ],
+          ],
         ),
         leading: IconButton(
           icon:
@@ -195,7 +226,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
             icon: const Icon(Icons.edit_outlined,
                 color: Color(0xFF6C63FF), size: 22),
             tooltip: 'Rename',
-            onPressed: _showRenameDialog,
+            onPressed: _showEditDialog,
           ),
           const SizedBox(width: 4),
         ],
@@ -204,40 +235,38 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: logs.isEmpty
+            child: groups.isEmpty
                 ? const Center(
                     child: Text(
                       'No sessions logged yet',
                       style: TextStyle(color: Colors.white38, fontSize: 15),
                     ),
                   )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-                        child: Text(
-                          'Recent Sessions',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.45),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.8,
+                      for (final group in groups) ...[
+                        _DatePill(date: group.key),
+                        for (final log in group.value)
+                          SwipeToDeleteCard(
+                            key: ValueKey(log.id ?? log.hashCode),
+                            onTap: () => _editLog(log),
+                            onDeleteConfirmed: () {
+                              setState(() => _logs.remove(log));
+                              if (log.id != null) {
+                                DatabaseService.instance.deleteLog(log.id!);
+                              }
+                            },
+                            deleteTitle: 'Delete Log',
+                            deleteMessage: 'Remove this session?',
+                            bottomMargin: 10,
+                            child: _WorkoutLogCardContent(
+                              log: log,
+                              exerciseType: widget.exercise.exerciseType,
+                              isBodyweightOnly: _isBodyweightOnly,
+                            ),
                           ),
-                        ),
-                      ),
-                      Expanded(
-                        child: ListView.builder(
-                          padding:
-                              const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                          itemCount: logs.length,
-                          itemBuilder: (context, index) => _WorkoutLogCard(
-                            log: logs[index],
-                            exerciseType: widget.exercise.exerciseType,
-                            onTap: () => _editLog(logs[index]),
-                          ),
-                        ),
-                      ),
+                      ],
                     ],
                   ),
           ),
@@ -246,7 +275,8 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
             child: _AddLogButton(onTap: _showAddLogSheet),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+            padding: EdgeInsets.fromLTRB(
+                16, 0, 16, MediaQuery.of(context).padding.bottom + 16),
             child: _GraphButton(onTap: _showVolumeChart),
           ),
         ],
@@ -255,29 +285,22 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
   }
 }
 
-class _WorkoutLogCard extends StatelessWidget {
-  const _WorkoutLogCard({
+class _WorkoutLogCardContent extends StatelessWidget {
+  const _WorkoutLogCardContent({
     required this.log,
     required this.exerciseType,
-    required this.onTap,
+    this.isBodyweightOnly = false,
   });
 
   final WorkoutLog log;
   final ExerciseType exerciseType;
-  final VoidCallback onTap;
+  final bool isBodyweightOnly;
 
   bool get _isTimeBased => exerciseType == ExerciseType.timeBased;
 
-  String _formatDate(DateTime d) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${months[d.month - 1]} ${d.day}, ${d.year}';
-  }
-
   String _primaryValue() {
     if (_isTimeBased) return _formatTime(log.totalTime ?? 0);
+    if (isBodyweightOnly) return '${log.totalReps} reps';
     final n = log.volume.toInt();
     if (n >= 1000) {
       return '${n ~/ 1000},${(n % 1000).toString().padLeft(3, '0')} lbs';
@@ -286,9 +309,14 @@ class _WorkoutLogCard extends StatelessWidget {
   }
 
   String _secondaryValue() {
-    if (_isTimeBased) return '${log.sets} sets';
-    return '${log.totalReps} total reps';
+    if (_isTimeBased && !isBodyweightOnly && log.weight > 0) {
+      return '${_stripTrailingZero(log.weight)} lbs · ${log.sets} sets';
+    }
+    return '${log.sets} sets';
   }
+
+  String _stripTrailingZero(double v) =>
+      v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
 
   String _formatTime(int seconds) {
     final m = seconds ~/ 60;
@@ -298,48 +326,52 @@ class _WorkoutLogCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Text(
-              _formatDate(log.date),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            _primaryValue(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
             ),
-            const Spacer(),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  _primaryValue(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _secondaryValue(),
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.45),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
+          ),
+          Text(
+            _secondaryValue(),
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.45),
+              fontSize: 13,
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DatePill extends StatelessWidget {
+  const _DatePill({required this.date});
+  final DateTime date;
+
+  String _format(DateTime d) {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun',
+                    'Jul','Aug','Sep','Oct','Nov','Dec'];
+    return '${months[d.month - 1]} ${d.day}, ${d.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, top: 16, bottom: 6),
+      child: Text(
+        _format(date),
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.45),
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
