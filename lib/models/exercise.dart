@@ -7,6 +7,8 @@ class Exercise {
   final ExerciseType exerciseType;
   bool isBodyweightOnly;
   final List<WorkoutLog> logs;
+  String? groupId;
+  int orderIndex;
 
   Exercise({
     required this.id,
@@ -14,6 +16,8 @@ class Exercise {
     required this.exerciseType,
     this.isBodyweightOnly = false,
     this.logs = const [],
+    this.groupId,
+    this.orderIndex = 0,
   });
 
   factory Exercise.fromJson(Map<String, dynamic> json, List<WorkoutLog> logs) =>
@@ -25,5 +29,7 @@ class Exercise {
             : ExerciseType.repBased,
         isBodyweightOnly: (json['is_bodyweight_only'] as bool?) ?? false,
         logs: logs,
+        groupId: json['group_id'] as String?,
+        orderIndex: (json['order_index'] as int?) ?? 0,
       );
 }

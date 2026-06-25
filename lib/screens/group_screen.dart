@@ -1,19 +1,15 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/exercise.dart';
 import '../models/exercise_group.dart';
 import '../models/exercise_type.dart';
-import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../widgets/bodyweight_badge.dart';
 import '../widgets/create_exercise_sheet.dart';
 import '../widgets/group_card.dart';
-import '../widgets/swipe_to_delete_card.dart';
-import '../widgets/calendar_sheet.dart';
 import '../widgets/group_name_sheet.dart';
+import '../widgets/swipe_to_delete_card.dart';
 import 'exercise_detail_screen.dart';
-import 'group_screen.dart';
 
 sealed class _DragData {}
 
@@ -27,14 +23,16 @@ class _GroupDrag extends _DragData {
   _GroupDrag(this.group);
 }
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+class GroupScreen extends StatefulWidget {
+  const GroupScreen({super.key, required this.group});
+
+  final ExerciseGroup group;
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<GroupScreen> createState() => _GroupScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen>
+class _GroupScreenState extends State<GroupScreen>
     with SingleTickerProviderStateMixin {
   List<Exercise> _exercises = [];
   List<ExerciseGroup> _groups = [];
@@ -43,10 +41,12 @@ class _HomeScreenState extends State<HomeScreen>
   bool _isJiggleMode = false;
   _DragData? _dragging;
   late final AnimationController _jiggleController;
+  late String _groupName;
 
   @override
   void initState() {
     super.initState();
+    _groupName = widget.group.name;
     _jiggleController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
@@ -60,16 +60,15 @@ class _HomeScreenState extends State<HomeScreen>
     super.dispose();
   }
 
-  List<Object> get _rootItems {
+  // Items directly in this group, sorted by orderIndex
+  List<Object> get _groupItems {
     final items = <Object>[
-      ..._exercises.where((e) => e.groupId == null),
-      ..._groups.where((g) => g.parentGroupId == null),
+      ..._exercises.where((e) => e.groupId == widget.group.id),
+      ..._groups.where((g) => g.parentGroupId == widget.group.id),
     ];
     items.sort((a, b) {
-      final ai =
-          a is Exercise ? a.orderIndex : (a as ExerciseGroup).orderIndex;
-      final bi =
-          b is Exercise ? b.orderIndex : (b as ExerciseGroup).orderIndex;
+      final ai = a is Exercise ? a.orderIndex : (a as ExerciseGroup).orderIndex;
+      final bi = b is Exercise ? b.orderIndex : (b as ExerciseGroup).orderIndex;
       return ai.compareTo(bi);
     });
     return items;
@@ -112,53 +111,118 @@ class _HomeScreenState extends State<HomeScreen>
   void _openDetail(Exercise exercise) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => ExerciseDetailScreen(exercise: exercise)),
+      MaterialPageRoute(
+        builder: (_) => ExerciseDetailScreen(exercise: exercise),
+      ),
     ).then((_) => _loadData());
   }
 
-  void _openGroup(ExerciseGroup group) {
+  void _openSubGroup(ExerciseGroup group) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => GroupScreen(group: group)),
     ).then((_) => _loadData());
   }
 
+  void _showRenameDialog() {
+    final controller = TextEditingController(text: _groupName);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text(
+          'Rename Group',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          cursorColor: const Color(0xFF6C63FF),
+          decoration: InputDecoration(
+            hintText: 'Group name',
+            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.35)),
+            enabledBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.white24),
+            ),
+            focusedBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFF6C63FF)),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              final trimmed = controller.text.trim();
+              Navigator.pop(ctx);
+              if (trimmed.isEmpty || trimmed == _groupName) return;
+              setState(() {
+                _groupName = trimmed;
+                widget.group.name = trimmed;
+              });
+              await DatabaseService.instance.renameGroup(
+                widget.group.id,
+                trimmed,
+              );
+            },
+            child: const Text(
+              'Save',
+              style: TextStyle(color: Color(0xFF6C63FF)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showCreateSheet() {
     if (_isJiggleMode) _exitJiggleMode();
-    showModalBottomSheet<({String name, ExerciseType exerciseType, bool isBodyweightOnly})>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const CreateExerciseSheet(),
-    ).then((result) async {
-      if (result == null) return;
-      try {
-        final rootCount = _exercises.where((e) => e.groupId == null).length +
-            _groups.where((g) => g.parentGroupId == null).length;
-        final exercise = await DatabaseService.instance.createExercise(
-          result.name,
-          result.exerciseType,
-          result.isBodyweightOnly,
-          rootCount,
-        );
-        if (mounted) {
-          setState(() => _exercises.add(exercise));
-          _openDetail(exercise);
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('Failed to create: $e')));
-        }
-      }
-    });
+    showModalBottomSheet<
+          ({String name, ExerciseType exerciseType, bool isBodyweightOnly})
+        >(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => const CreateExerciseSheet(),
+        )
+        .then((result) async {
+          if (result == null) return;
+          try {
+            final idx =
+                _exercises.where((e) => e.groupId == widget.group.id).length +
+                _groups.where((g) => g.parentGroupId == widget.group.id).length;
+            final exercise = await DatabaseService.instance.createExercise(
+              result.name,
+              result.exerciseType,
+              result.isBodyweightOnly,
+              idx,
+              groupId: widget.group.id,
+            );
+            if (mounted) {
+              setState(() => _exercises.add(exercise));
+              _openDetail(exercise);
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('Failed to create: $e')));
+            }
+          }
+        });
   }
 
   Future<void> _deleteExercise(Exercise exercise) async {
-    final oldGroupId = exercise.groupId;
     setState(() => _exercises.remove(exercise));
     await DatabaseService.instance.deleteExercise(exercise.id);
-    if (oldGroupId != null) await _checkAndDeleteEmptyGroup(oldGroupId);
+    await _checkAndDeleteEmptyGroup(widget.group.id);
   }
 
   Future<void> _checkAndDeleteEmptyGroup(String groupId) async {
@@ -175,18 +239,57 @@ class _HomeScreenState extends State<HomeScreen>
     await DatabaseService.instance.deleteGroup(groupId);
     if (!mounted) return;
     setState(() => _groups.removeWhere((g) => g.id == groupId));
+
+    if (groupId == widget.group.id) {
+      // This group itself was deleted → pop back
+      if (mounted) Navigator.pop(context);
+      return;
+    }
     if (parentId != null) await _checkAndDeleteEmptyGroup(parentId);
   }
 
+  Future<void> _moveItemToRoot(_DragData data) async {
+    if (data is _ExerciseDrag) {
+      final exercise = data.exercise;
+      final rootCount =
+          _exercises.where((e) => e.groupId == null).length +
+          _groups.where((g) => g.parentGroupId == null).length;
+      await DatabaseService.instance.moveExerciseToGroup(
+        exercise.id,
+        null,
+        rootCount,
+      );
+      setState(() {
+        exercise.groupId = null;
+        exercise.orderIndex = rootCount;
+      });
+    } else if (data is _GroupDrag) {
+      final group = data.group;
+      final rootCount = _groups.where((g) => g.parentGroupId == null).length;
+      await DatabaseService.instance.moveGroupToParent(
+        group.id,
+        null,
+        rootCount,
+      );
+      setState(() {
+        group.parentGroupId = null;
+        group.orderIndex = rootCount;
+      });
+    }
+    await _checkAndDeleteEmptyGroup(widget.group.id);
+  }
+
   Future<void> _reorderItem(_DragData data, int gapIndex) async {
-    final items = _rootItems;
+    final items = _groupItems;
     int srcIndex = -1;
     if (data is _ExerciseDrag) {
       srcIndex = items.indexWhere(
-          (i) => i is Exercise && i.id == data.exercise.id);
+        (i) => i is Exercise && i.id == data.exercise.id,
+      );
     } else if (data is _GroupDrag) {
       srcIndex = items.indexWhere(
-          (i) => i is ExerciseGroup && i.id == data.group.id);
+        (i) => i is ExerciseGroup && i.id == data.group.id,
+      );
     }
     if (srcIndex == -1) return;
 
@@ -207,17 +310,20 @@ class _HomeScreenState extends State<HomeScreen>
 
     for (int i = 0; i < newItems.length; i++) {
       if (newItems[i] is Exercise) {
-        DatabaseService.instance
-            .reorderExercise((newItems[i] as Exercise).id, i);
+        DatabaseService.instance.reorderExercise(
+          (newItems[i] as Exercise).id,
+          i,
+        );
       } else {
-        DatabaseService.instance
-            .reorderGroup((newItems[i] as ExerciseGroup).id, i);
+        DatabaseService.instance.reorderGroup(
+          (newItems[i] as ExerciseGroup).id,
+          i,
+        );
       }
     }
   }
 
-  Future<void> _createGroupFromExercises(
-      Exercise src, Exercise target) async {
+  Future<void> _createGroupFromExercises(Exercise src, Exercise target) async {
     final name = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -230,7 +336,7 @@ class _HomeScreenState extends State<HomeScreen>
     try {
       final group = await DatabaseService.instance.createGroup(
         name,
-        parentGroupId: null,
+        parentGroupId: widget.group.id,
         orderIndex: orderIndex,
       );
       await Future.wait([
@@ -248,160 +354,50 @@ class _HomeScreenState extends State<HomeScreen>
       _exitJiggleMode();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Failed to create group: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to create group: $e')));
       }
     }
   }
 
   Future<void> _moveExerciseToGroup(
-      Exercise exercise, ExerciseGroup group) async {
+    Exercise exercise,
+    ExerciseGroup group,
+  ) async {
     final oldGroupId = exercise.groupId;
-    final newIdx =
-        _exercises.where((e) => e.groupId == group.id).length;
-    await DatabaseService.instance
-        .moveExerciseToGroup(exercise.id, group.id, newIdx);
+    final newIdx = _exercises.where((e) => e.groupId == group.id).length;
+    await DatabaseService.instance.moveExerciseToGroup(
+      exercise.id,
+      group.id,
+      newIdx,
+    );
     if (!mounted) return;
     setState(() {
       exercise.groupId = group.id;
       exercise.orderIndex = newIdx;
     });
-    if (oldGroupId != null) await _checkAndDeleteEmptyGroup(oldGroupId);
+    if (oldGroupId != null && oldGroupId != group.id) {
+      await _checkAndDeleteEmptyGroup(oldGroupId);
+    }
   }
 
   Future<void> _moveGroupIntoGroup(
-      ExerciseGroup src, ExerciseGroup target) async {
+    ExerciseGroup src,
+    ExerciseGroup target,
+  ) async {
     if (src.id == target.id) return;
     final oldParentId = src.parentGroupId;
-    final newIdx =
-        _groups.where((g) => g.parentGroupId == target.id).length;
-    await DatabaseService.instance
-        .moveGroupToParent(src.id, target.id, newIdx);
+    final newIdx = _groups.where((g) => g.parentGroupId == target.id).length;
+    await DatabaseService.instance.moveGroupToParent(src.id, target.id, newIdx);
     if (!mounted) return;
     setState(() {
       src.parentGroupId = target.id;
       src.orderIndex = newIdx;
     });
-    if (oldParentId != null) await _checkAndDeleteEmptyGroup(oldParentId);
-  }
-
-  void _showCalendar() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => CalendarSheet(exercises: _exercises),
-    ).then((_) => _loadData());
-  }
-
-  Future<void> _signOut() async => AuthService.instance.signOut();
-
-  Future<void> _deleteAccount() async {
-    try {
-      await DatabaseService.instance.deleteAllUserData();
-      await AuthService.instance.deleteAccount();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Failed to delete account: $e')));
-      }
+    if (oldParentId != null && oldParentId != target.id) {
+      await _checkAndDeleteEmptyGroup(oldParentId);
     }
-  }
-
-  void _showDeleteConfirmation() {
-    showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.warning_rounded, color: Colors.red, size: 28),
-            SizedBox(width: 10),
-            Text('Delete Account',
-                style: TextStyle(
-                    color: Colors.red, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('This action cannot be undone.',
-                style: TextStyle(
-                    color: Colors.red,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14)),
-            SizedBox(height: 10),
-            Text(
-                'All your exercises, workout logs, and account data will be permanently deleted.',
-                style: TextStyle(color: Colors.white70, fontSize: 14)),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel',
-                style: TextStyle(color: Colors.white70)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red, foregroundColor: Colors.white),
-            child: const Text('Delete Everything'),
-          ),
-        ],
-      ),
-    ).then((confirmed) {
-      if (confirmed == true) _deleteAccount();
-    });
-  }
-
-  Widget _buildAvatar() {
-    final meta =
-        Supabase.instance.client.auth.currentUser?.userMetadata;
-    final avatarUrl =
-        meta?['avatar_url'] as String? ?? meta?['picture'] as String?;
-    return PopupMenuButton<String>(
-      onSelected: (value) {
-        if (value == 'sign_out') {
-          _signOut();
-        } else if (value == 'delete_account') {
-          _showDeleteConfirmation();
-        }
-      },
-      offset: const Offset(0, 8),
-      color: const Color(0xFF2A2A2A),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      itemBuilder: (_) => const [
-        PopupMenuItem<String>(
-          value: 'sign_out',
-          child: Row(children: [
-            Icon(Icons.logout, color: Colors.white, size: 18),
-            SizedBox(width: 10),
-            Text('Sign Out', style: TextStyle(color: Colors.white)),
-          ]),
-        ),
-        PopupMenuItem<String>(
-          value: 'delete_account',
-          child: Row(children: [
-            Icon(Icons.delete_forever, color: Colors.red, size: 18),
-            SizedBox(width: 10),
-            Text('Delete Account', style: TextStyle(color: Colors.red)),
-          ]),
-        ),
-      ],
-      child: CircleAvatar(
-        radius: 16,
-        backgroundColor: const Color(0xFF6C63FF),
-        backgroundImage:
-            avatarUrl != null ? NetworkImage(avatarUrl) : null,
-        child: avatarUrl == null
-            ? const Icon(Icons.person, color: Colors.white, size: 18)
-            : null,
-      ),
-    );
   }
 
   // ── Build helpers ──────────────────────────────────────────────
@@ -459,23 +455,22 @@ class _HomeScreenState extends State<HomeScreen>
     final isDraggingThis = _isDraggingItem(item);
     final screenWidth = MediaQuery.of(context).size.width;
 
-    // 1. Raw card content (no drag/target wrapping)
     Widget rawCard;
     if (item is Exercise) {
       rawCard = _buildExerciseRawCard(item);
     } else {
       final group = item as ExerciseGroup;
-      final count = _exercises.where((e) => e.groupId == group.id).length +
+      final count =
+          _exercises.where((e) => e.groupId == group.id).length +
           _groups.where((g) => g.parentGroupId == group.id).length;
       rawCard = GroupCard(
         group: group,
         itemCount: count,
-        onTap: () => _openGroup(group),
+        onTap: () => _openSubGroup(group),
         isJiggleMode: _isJiggleMode,
       );
     }
 
-    // 2. Wrap rawCard in DragTarget for grouping (only when dragging something other than this item)
     Widget displayCard = rawCard;
     if (_isJiggleMode && _dragging != null && !isDraggingThis) {
       displayCard = DragTarget<_DragData>(
@@ -509,7 +504,9 @@ class _HomeScreenState extends State<HomeScreen>
             decoration: isHovered
                 ? BoxDecoration(
                     border: Border.all(
-                        color: const Color(0xFF6C63FF), width: 2),
+                      color: const Color(0xFF6C63FF),
+                      width: 2,
+                    ),
                     borderRadius: BorderRadius.circular(12),
                   )
                 : null,
@@ -535,15 +532,14 @@ class _HomeScreenState extends State<HomeScreen>
       child = Draggable<_DragData>(
         data: dragData,
         onDragStarted: () => setState(() => _dragging = dragData),
-        onDraggableCanceled: (velocity, offset) => setState(() => _dragging = null),
+        onDraggableCanceled: (velocity, offset) =>
+            setState(() => _dragging = null),
         onDragEnd: (_) => setState(() => _dragging = null),
         feedback: feedback,
         childWhenDragging: Opacity(opacity: 0.3, child: displayCard),
         child: displayCard,
       );
     } else {
-      // Long-press enters jiggle mode AND starts the drag simultaneously,
-      // just like iOS — no need to release and press again.
       final dragData = item is Exercise
           ? _ExerciseDrag(item)
           : _GroupDrag(item as ExerciseGroup);
@@ -559,7 +555,7 @@ class _HomeScreenState extends State<HomeScreen>
               child: _ExerciseCardContent(exercise: item),
             )
           : GestureDetector(
-              onTap: () => _openGroup(item as ExerciseGroup),
+              onTap: () => _openSubGroup(item as ExerciseGroup),
               child: rawCard,
             );
 
@@ -569,7 +565,8 @@ class _HomeScreenState extends State<HomeScreen>
           _enterJiggleMode();
           setState(() => _dragging = dragData);
         },
-        onDraggableCanceled: (velocity, offset) => setState(() => _dragging = null),
+        onDraggableCanceled: (velocity, offset) =>
+            setState(() => _dragging = null),
         onDragEnd: (_) => setState(() => _dragging = null),
         feedback: feedback,
         childWhenDragging: Opacity(opacity: 0.3, child: tappableCard),
@@ -585,10 +582,64 @@ class _HomeScreenState extends State<HomeScreen>
           if (!_isJiggleMode) return innerChild!;
           final angle =
               math.sin(_jiggleController.value * math.pi * 2 + index * 1.1) *
-                  0.018;
+              0.018;
           return Transform.rotate(angle: angle, child: innerChild);
         },
         child: child,
+      ),
+    );
+  }
+
+  Widget _buildMoveOutZone() {
+    if (!_isJiggleMode || _dragging == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: DragTarget<_DragData>(
+        onWillAcceptWithDetails: (_) => true,
+        onAcceptWithDetails: (details) => _moveItemToRoot(details.data),
+        builder: (context, candidateData, _) {
+          final isHovered = candidateData.isNotEmpty;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 100),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E1E),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isHovered
+                    ? const Color(0xFF6C63FF)
+                    : const Color(0xFF6C63FF).withValues(alpha: 0.35),
+                width: isHovered ? 2 : 1,
+              ),
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6C63FF).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.subdirectory_arrow_left_rounded,
+                    color: Color(0xFF6C63FF),
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                const Text(
+                  'Drag here to move out',
+                  style: TextStyle(
+                    color: Color(0xFF6C63FF),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -600,20 +651,28 @@ class _HomeScreenState extends State<HomeScreen>
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
-        title: const Text(
-          'Progress',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
-        ),
-        centerTitle: true,
         backgroundColor: const Color(0xFF1A1A1A),
         surfaceTintColor: Colors.transparent,
-        leading: _isJiggleMode
-            ? null
-            : IconButton(
-                icon: const Icon(Icons.calendar_month_outlined,
-                    color: Colors.white, size: 24),
-                onPressed: _showCalendar,
-              ),
+        centerTitle: true,
+        title: GestureDetector(
+          onTap: _showRenameDialog,
+          child: Text(
+            _groupName,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
+        ),
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: Colors.white,
+            size: 20,
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
         actions: _isJiggleMode
             ? [
                 TextButton(
@@ -629,10 +688,15 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ]
             : [
-                Padding(
-                  padding: const EdgeInsets.only(right: 16),
-                  child: _buildAvatar(),
+                IconButton(
+                  icon: const Icon(
+                    Icons.edit_outlined,
+                    color: Color(0xFF6C63FF),
+                    size: 22,
+                  ),
+                  onPressed: _showRenameDialog,
                 ),
+                const SizedBox(width: 4),
               ],
       ),
       body: _buildBody(),
@@ -642,37 +706,36 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildBody() {
     if (_isLoading) {
       return const Center(
-          child: CircularProgressIndicator(color: Color(0xFF6C63FF)));
+        child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
+      );
     }
 
     if (_error != null) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.wifi_off_rounded,
-                  color: Colors.white.withValues(alpha: 0.3), size: 48),
-              const SizedBox(height: 16),
-              Text('Failed to load exercises',
-                  style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.6),
-                      fontSize: 16)),
-              const SizedBox(height: 24),
-              TextButton(
-                onPressed: _loadData,
-                child: const Text('Retry',
-                    style:
-                        TextStyle(color: Color(0xFF6C63FF), fontSize: 15)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Failed to load',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 16,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: _loadData,
+              child: const Text(
+                'Retry',
+                style: TextStyle(color: Color(0xFF6C63FF)),
+              ),
+            ),
+          ],
         ),
       );
     }
 
-    final items = _rootItems;
+    final items = _groupItems;
     return Column(
       children: [
         Expanded(
@@ -680,26 +743,13 @@ class _HomeScreenState extends State<HomeScreen>
               ? Center(
                   child: Padding(
                     padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.fitness_center,
-                            color: Colors.white.withValues(alpha: 0.2),
-                            size: 56),
-                        const SizedBox(height: 16),
-                        Text('No exercises yet',
-                            style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.5),
-                                fontSize: 16)),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Tap the button below to add your first exercise',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.3),
-                              fontSize: 13),
-                        ),
-                      ],
+                    child: Text(
+                      'No exercises in this group yet',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.4),
+                        fontSize: 15,
+                      ),
                     ),
                   ),
                 )
@@ -712,9 +762,14 @@ class _HomeScreenState extends State<HomeScreen>
                   },
                 ),
         ),
+        _buildMoveOutZone(),
         Padding(
           padding: EdgeInsets.fromLTRB(
-              16, 8, 16, MediaQuery.of(context).padding.bottom + 16),
+            16,
+            4,
+            16,
+            MediaQuery.of(context).padding.bottom + 16,
+          ),
           child: GestureDetector(
             onTap: _showCreateSheet,
             child: Container(
@@ -746,8 +801,6 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 }
-
-// ── Private card content widget ────────────────────────────────
 
 class _ExerciseCardContent extends StatelessWidget {
   const _ExerciseCardContent({required this.exercise});
@@ -799,8 +852,7 @@ class _ExerciseCardContent extends StatelessWidget {
               ],
             ),
           ),
-          Icon(Icons.chevron_right,
-              color: Colors.white.withValues(alpha: 0.3)),
+          Icon(Icons.chevron_right, color: Colors.white.withValues(alpha: 0.3)),
         ],
       ),
     );
