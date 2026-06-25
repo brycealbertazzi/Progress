@@ -322,7 +322,7 @@ class _TimePicker extends StatelessWidget {
   static const _itemExtent = 46.0;
   static const _pickerHeight = 180.0;
 
-  Widget _loopingWheel(
+  Widget _linearWheel(
     FixedExtentScrollController controller,
     int itemCount,
     ValueChanged<int> onChanged, {
@@ -331,7 +331,7 @@ class _TimePicker extends StatelessWidget {
     return CupertinoPicker(
       scrollController: controller,
       itemExtent: _itemExtent,
-      looping: true,
+      looping: false,
       backgroundColor: Colors.transparent,
       onSelectedItemChanged: onChanged,
       selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
@@ -449,7 +449,7 @@ class _TimePicker extends StatelessWidget {
               if (isHoursMode) ...[
                 Expanded(
                   key: const ValueKey('hours'),
-                  child: _loopingWheel(hoursController, 24, onHoursChanged),
+                  child: _linearWheel(hoursController, 24, onHoursChanged),
                 ),
                 _colon(),
               ],
@@ -460,7 +460,7 @@ class _TimePicker extends StatelessWidget {
               _colon(),
               Expanded(
                 key: const ValueKey('seconds'),
-                child: _loopingWheel(secondsController, 60, onSecondsChanged),
+                child: _linearWheel(secondsController, 60, onSecondsChanged),
               ),
             ],
           ),
