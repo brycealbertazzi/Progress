@@ -88,11 +88,110 @@ class _HomeScreenState extends State<HomeScreen> {
     await AuthService.instance.signOut();
   }
 
+  Future<void> _deleteAccount() async {
+    try {
+      await DatabaseService.instance.deleteAllUserData();
+      await AuthService.instance.deleteAccount();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete account: $e')),
+        );
+      }
+    }
+  }
+
+  void _showDeleteConfirmation() {
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_rounded, color: Colors.red, size: 28),
+            SizedBox(width: 10),
+            Text(
+              'Delete Account',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This action cannot be undone.',
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+            SizedBox(height: 10),
+            Text(
+              'All your exercises, workout logs, and account data will be permanently deleted.',
+              style: TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete Everything'),
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed == true) _deleteAccount();
+    });
+  }
+
   Widget _buildAvatar() {
     final meta = Supabase.instance.client.auth.currentUser?.userMetadata;
     final avatarUrl = meta?['avatar_url'] as String? ?? meta?['picture'] as String?;
-    return GestureDetector(
-      onTap: _signOut,
+    return PopupMenuButton<String>(
+      onSelected: (value) {
+        if (value == 'sign_out') {
+          _signOut();
+        } else if (value == 'delete_account') {
+          _showDeleteConfirmation();
+        }
+      },
+      offset: const Offset(0, 8),
+      color: const Color(0xFF2A2A2A),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      itemBuilder: (_) => const [
+        PopupMenuItem<String>(
+          value: 'sign_out',
+          child: Row(
+            children: [
+              Icon(Icons.logout, color: Colors.white, size: 18),
+              SizedBox(width: 10),
+              Text('Sign Out', style: TextStyle(color: Colors.white)),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'delete_account',
+          child: Row(
+            children: [
+              Icon(Icons.delete_forever, color: Colors.red, size: 18),
+              SizedBox(width: 10),
+              Text('Delete Account', style: TextStyle(color: Colors.red)),
+            ],
+          ),
+        ),
+      ],
       child: CircleAvatar(
         radius: 16,
         backgroundColor: const Color(0xFF6C63FF),

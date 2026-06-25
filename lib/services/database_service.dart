@@ -82,4 +82,11 @@ class DatabaseService {
   Future<void> deleteLog(String id) async {
     await _client.from('workout_logs').delete().eq('id', id);
   }
+
+  Future<void> deleteAllUserData() async {
+    await Future.wait([
+      _client.from('workout_logs').delete().eq('user_id', _uid),
+      _client.from('exercises').delete().eq('user_id', _uid),
+    ]);
+  }
 }
