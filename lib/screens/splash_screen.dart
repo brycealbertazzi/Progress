@@ -29,7 +29,7 @@ class _SplashScreenState extends State<SplashScreen> {
     final cornerRadius = iconSize * 0.2256;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFF2F006C),
       body: Center(
         child: ClipRRect(
           borderRadius: BorderRadius.circular(cornerRadius),
