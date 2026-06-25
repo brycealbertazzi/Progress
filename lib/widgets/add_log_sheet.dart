@@ -23,10 +23,13 @@ class AddLogSheet extends StatefulWidget {
 class _AddLogSheetState extends State<AddLogSheet> {
   late final TextEditingController _weightController;
   late final TextEditingController _totalRepsController;
+  late final FixedExtentScrollController _hoursController;
   late final FixedExtentScrollController _minutesController;
   late final FixedExtentScrollController _secondsController;
+  int _hours = 0;
   int _minutes = 0;
   int _seconds = 0;
+  bool _isHoursMode = false;
   late bool _canLog;
 
   bool get _isEditing => widget.initialLog != null;
@@ -46,9 +49,18 @@ class _AddLogSheetState extends State<AddLogSheet> {
     );
 
     if (log?.totalTime != null) {
-      _minutes = log!.totalTime! ~/ 60;
-      _seconds = log.totalTime! % 60;
+      if (log!.isHoursUsed) {
+        _isHoursMode = true;
+        _hours = log.totalTime! ~/ 3600;
+        _minutes = (log.totalTime! % 3600) ~/ 60;
+        _seconds = log.totalTime! % 60;
+      } else {
+        _minutes = log.totalTime! ~/ 60;
+        _seconds = log.totalTime! % 60;
+      }
     }
+
+    _hoursController = FixedExtentScrollController(initialItem: _hours);
     _minutesController = FixedExtentScrollController(initialItem: _minutes);
     _secondsController = FixedExtentScrollController(initialItem: _seconds);
 
@@ -67,6 +79,7 @@ class _AddLogSheetState extends State<AddLogSheet> {
 
   @override
   void dispose() {
+    _hoursController.dispose();
     _minutesController.dispose();
     _secondsController.dispose();
     for (final c in [_weightController, _totalRepsController]) {
@@ -78,16 +91,26 @@ class _AddLogSheetState extends State<AddLogSheet> {
   void _onChanged() {
     final controllersOk =
         _activeControllers.every((c) => c.text.trim().isNotEmpty);
-    final timeOk = !_isTimeBased || (_minutes * 60 + _seconds) > 0;
+    final totalSecs = _hours * 3600 + _minutes * 60 + _seconds;
+    final timeOk = !_isTimeBased || totalSecs > 0;
     final can = controllersOk && timeOk;
     if (can != _canLog) setState(() => _canLog = can);
+  }
+
+  void _onHoursModeChanged(bool value) {
+    if (!value) {
+      _hours = 0;
+      if (_hoursController.hasClients) _hoursController.jumpToItem(0);
+    }
+    setState(() => _isHoursMode = value);
+    _onChanged();
   }
 
   String _stripTrailingZero(double v) =>
       v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
 
   void _submit() {
-    final totalTime = _minutes * 60 + _seconds;
+    final totalTime = _hours * 3600 + _minutes * 60 + _seconds;
 
     if (_isTimeBased && _isBodyweight) {
       if (totalTime <= 0) return;
@@ -97,6 +120,7 @@ class _AddLogSheetState extends State<AddLogSheet> {
           date: widget.initialLog?.date ?? DateTime.now(),
           weight: 0,
           totalTime: totalTime,
+          isHoursUsed: _isHoursMode,
         ),
       );
     } else if (_isTimeBased) {
@@ -108,6 +132,7 @@ class _AddLogSheetState extends State<AddLogSheet> {
           date: widget.initialLog?.date ?? DateTime.now(),
           weight: weight,
           totalTime: totalTime,
+          isHoursUsed: _isHoursMode,
         ),
       );
     } else if (_isBodyweight) {
@@ -173,16 +198,14 @@ class _AddLogSheetState extends State<AddLogSheet> {
           const SizedBox(height: 28),
           if (_isTimeBased && _isBodyweight)
             _TimePicker(
+              isHoursMode: _isHoursMode,
+              hoursController: _hoursController,
               minutesController: _minutesController,
               secondsController: _secondsController,
-              onMinutesChanged: (v) {
-                _minutes = v;
-                _onChanged();
-              },
-              onSecondsChanged: (v) {
-                _seconds = v;
-                _onChanged();
-              },
+              onHoursModeChanged: _onHoursModeChanged,
+              onHoursChanged: (v) { _hours = v; _onChanged(); },
+              onMinutesChanged: (v) { _minutes = v; _onChanged(); },
+              onSecondsChanged: (v) { _seconds = v; _onChanged(); },
             )
           else if (_isTimeBased)
             Column(
@@ -197,16 +220,14 @@ class _AddLogSheetState extends State<AddLogSheet> {
                 ),
                 const SizedBox(height: 16),
                 _TimePicker(
+                  isHoursMode: _isHoursMode,
+                  hoursController: _hoursController,
                   minutesController: _minutesController,
                   secondsController: _secondsController,
-                  onMinutesChanged: (v) {
-                    _minutes = v;
-                    _onChanged();
-                  },
-                  onSecondsChanged: (v) {
-                    _seconds = v;
-                    _onChanged();
-                  },
+                  onHoursModeChanged: _onHoursModeChanged,
+                  onHoursChanged: (v) { _hours = v; _onChanged(); },
+                  onMinutesChanged: (v) { _minutes = v; _onChanged(); },
+                  onSecondsChanged: (v) { _seconds = v; _onChanged(); },
                 ),
               ],
             )
@@ -279,19 +300,58 @@ class _AddLogSheetState extends State<AddLogSheet> {
 
 class _TimePicker extends StatelessWidget {
   const _TimePicker({
+    required this.isHoursMode,
+    required this.hoursController,
     required this.minutesController,
     required this.secondsController,
+    required this.onHoursModeChanged,
+    required this.onHoursChanged,
     required this.onMinutesChanged,
     required this.onSecondsChanged,
   });
 
+  final bool isHoursMode;
+  final FixedExtentScrollController hoursController;
   final FixedExtentScrollController minutesController;
   final FixedExtentScrollController secondsController;
+  final ValueChanged<bool> onHoursModeChanged;
+  final ValueChanged<int> onHoursChanged;
   final ValueChanged<int> onMinutesChanged;
   final ValueChanged<int> onSecondsChanged;
 
   static const _itemExtent = 46.0;
   static const _pickerHeight = 180.0;
+
+  Widget _loopingWheel(
+    FixedExtentScrollController controller,
+    int itemCount,
+    ValueChanged<int> onChanged, {
+    bool padded = true,
+  }) {
+    return CupertinoPicker(
+      scrollController: controller,
+      itemExtent: _itemExtent,
+      looping: true,
+      backgroundColor: Colors.transparent,
+      onSelectedItemChanged: onChanged,
+      selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
+        background: const Color(0xFF6C63FF).withValues(alpha: 0.12),
+      ),
+      children: List.generate(
+        itemCount,
+        (i) => Center(
+          child: Text(
+            padded ? i.toString().padLeft(2, '0') : '$i',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _minutesWheel() {
     return CupertinoPicker.builder(
@@ -304,7 +364,7 @@ class _TimePicker extends StatelessWidget {
       ),
       itemBuilder: (_, index) => Center(
         child: Text(
-          '$index',
+          isHoursMode ? index.toString().padLeft(2, '0') : '$index',
           style: const TextStyle(
             color: Colors.white,
             fontSize: 22,
@@ -315,45 +375,67 @@ class _TimePicker extends StatelessWidget {
     );
   }
 
-  Widget _secondsWheel() {
-    return CupertinoPicker(
-      scrollController: secondsController,
-      itemExtent: _itemExtent,
-      looping: true,
-      backgroundColor: Colors.transparent,
-      onSelectedItemChanged: onSecondsChanged,
-      selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
-        background: const Color(0xFF6C63FF).withValues(alpha: 0.12),
-      ),
-      children: List.generate(
-        60,
-        (i) => Center(
-          child: Text(
-            i.toString().padLeft(2, '0'),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w400,
-            ),
+  Widget _colon() => Padding(
+        padding: const EdgeInsets.only(bottom: 2),
+        child: Text(
+          ':',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.6),
+            fontSize: 28,
+            fontWeight: FontWeight.w200,
           ),
         ),
-      ),
-    );
-  }
+      );
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'TOTAL TIME',
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.45),
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.8,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'TOTAL TIME',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.45),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.8,
+              ),
+            ),
+            GestureDetector(
+              onTap: () => onHoursModeChanged(!isHoursMode),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isHoursMode
+                      ? const Color(0xFF6C63FF).withValues(alpha: 0.2)
+                      : Colors.white.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isHoursMode
+                        ? const Color(0xFF6C63FF).withValues(alpha: 0.5)
+                        : Colors.white.withValues(alpha: 0.15),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  'Hours',
+                  style: TextStyle(
+                    color: isHoursMode
+                        ? const Color(0xFF6C63FF)
+                        : Colors.white.withValues(alpha: 0.35),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         Container(
@@ -364,25 +446,43 @@ class _TimePicker extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Expanded(child: _minutesWheel()),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Text(
-                  ':',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    fontSize: 28,
-                    fontWeight: FontWeight.w200,
-                  ),
+              if (isHoursMode) ...[
+                Expanded(
+                  key: const ValueKey('hours'),
+                  child: _loopingWheel(hoursController, 24, onHoursChanged),
                 ),
+                _colon(),
+              ],
+              Expanded(
+                key: const ValueKey('minutes'),
+                child: _minutesWheel(),
               ),
-              Expanded(child: _secondsWheel()),
+              _colon(),
+              Expanded(
+                key: const ValueKey('seconds'),
+                child: _loopingWheel(secondsController, 60, onSecondsChanged),
+              ),
             ],
           ),
         ),
         const SizedBox(height: 6),
         Row(
           children: [
+            if (isHoursMode) ...[
+              Expanded(
+                child: Center(
+                  child: Text(
+                    'hr',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.3),
+                      fontSize: 11,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 20),
+            ],
             Expanded(
               child: Center(
                 child: Text(

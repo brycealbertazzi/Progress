@@ -303,7 +303,7 @@ class _WorkoutLogCardContent extends StatelessWidget {
     if (_isTimeBased && !isBodyweightOnly) {
       return '${_formatNumber(log.volume.toInt())} lbs·s';
     }
-    if (_isTimeBased) return _formatTime(log.totalTime ?? 0);
+    if (_isTimeBased) return _formatTime(log.totalTime ?? 0, withHours: log.isHoursUsed);
     if (!isBodyweightOnly) {
       return '${_formatNumber(log.volume.toInt())} lbs·reps';
     }
@@ -312,7 +312,7 @@ class _WorkoutLogCardContent extends StatelessWidget {
 
   String _secondaryValue() {
     if (_isTimeBased && !isBodyweightOnly) {
-      return '${_stripTrailingZero(log.weight)} lbs · ${_formatTime(log.totalTime ?? 0)}';
+      return '${_stripTrailingZero(log.weight)} lbs · ${_formatTime(log.totalTime ?? 0, withHours: log.isHoursUsed)}';
     }
     return '${_stripTrailingZero(log.weight)} lbs · ${log.totalReps} reps';
   }
@@ -323,7 +323,13 @@ class _WorkoutLogCardContent extends StatelessWidget {
   String _stripTrailingZero(double v) =>
       v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
 
-  String _formatTime(int seconds) {
+  String _formatTime(int seconds, {bool withHours = false}) {
+    if (withHours) {
+      final h = seconds ~/ 3600;
+      final m = (seconds % 3600) ~/ 60;
+      final s = seconds % 60;
+      return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    }
     final m = seconds ~/ 60;
     final s = seconds % 60;
     return '$m:${s.toString().padLeft(2, '0')}';

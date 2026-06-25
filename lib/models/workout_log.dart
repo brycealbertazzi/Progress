@@ -4,6 +4,7 @@ class WorkoutLog {
   final double weight;
   final int totalReps;
   final int? totalTime; // seconds — time-based exercises only
+  final bool isHoursUsed;
 
   const WorkoutLog({
     this.id,
@@ -11,6 +12,7 @@ class WorkoutLog {
     this.weight = 0,
     this.totalReps = 0,
     this.totalTime,
+    this.isHoursUsed = false,
   });
 
   double get volume {
@@ -26,6 +28,7 @@ class WorkoutLog {
         weight: (json['weight'] as num?)?.toDouble() ?? 0.0,
         totalReps: (json['total_reps'] as int?) ?? 0,
         totalTime: json['total_time'] as int?,
+        isHoursUsed: (json['is_hours_used'] as bool?) ?? false,
       );
 
   Map<String, dynamic> toInsertJson(String exerciseId, String userId) => {
@@ -35,6 +38,7 @@ class WorkoutLog {
         'weight': weight,
         'total_reps': totalReps,
         if (totalTime != null) 'total_time': totalTime,
+        'is_hours_used': isHoursUsed,
       };
 
   Map<String, dynamic> toUpdateJson() => {
@@ -42,6 +46,7 @@ class WorkoutLog {
         'weight': weight,
         'total_reps': totalReps,
         'total_time': totalTime,
+        'is_hours_used': isHoursUsed,
       };
 
   WorkoutLog copyWith({String? id}) => WorkoutLog(
@@ -50,6 +55,7 @@ class WorkoutLog {
         weight: weight,
         totalReps: totalReps,
         totalTime: totalTime,
+        isHoursUsed: isHoursUsed,
       );
 
   static String _dateString(DateTime d) =>
