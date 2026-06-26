@@ -351,7 +351,6 @@ class _GroupScreenState extends State<GroupScreen>
         target.orderIndex = 1;
         _groups.add(group);
       });
-      _exitJiggleMode();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -529,15 +528,18 @@ class _GroupScreenState extends State<GroupScreen>
       final dragData = item is Exercise
           ? _ExerciseDrag(item)
           : _GroupDrag(item as ExerciseGroup);
-      child = Draggable<_DragData>(
-        data: dragData,
-        onDragStarted: () => setState(() => _dragging = dragData),
-        onDraggableCanceled: (velocity, offset) =>
-            setState(() => _dragging = null),
-        onDragEnd: (_) => setState(() => _dragging = null),
-        feedback: feedback,
-        childWhenDragging: Opacity(opacity: 0.3, child: displayCard),
-        child: displayCard,
+      child = GestureDetector(
+        onTap: () {},
+        child: Draggable<_DragData>(
+          data: dragData,
+          onDragStarted: () => setState(() => _dragging = dragData),
+          onDraggableCanceled: (velocity, offset) =>
+              setState(() => _dragging = null),
+          onDragEnd: (_) => setState(() => _dragging = null),
+          feedback: feedback,
+          childWhenDragging: Opacity(opacity: 0.3, child: displayCard),
+          child: displayCard,
+        ),
       );
     } else {
       final dragData = item is Exercise
@@ -648,58 +650,54 @@ class _GroupScreenState extends State<GroupScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A1A),
-        surfaceTintColor: Colors.transparent,
-        centerTitle: true,
-        title: GestureDetector(
-          onTap: _showRenameDialog,
-          child: Text(
-            _groupName,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
+    return GestureDetector(
+      onTap: _isJiggleMode ? _exitJiggleMode : null,
+      behavior: HitTestBehavior.translucent,
+      child: Scaffold(
+        backgroundColor: const Color(0xFF121212),
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF1A1A1A),
+          surfaceTintColor: Colors.transparent,
+          centerTitle: true,
+          title: GestureDetector(
+            onTap: _isJiggleMode ? null : _showRenameDialog,
+            child: Text(
+              _groupName,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
             ),
           ),
-        ),
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Colors.white,
-            size: 20,
+          leading: Opacity(
+            opacity: _isJiggleMode ? 0.35 : 1.0,
+            child: IconButton(
+              icon: const Icon(
+                Icons.arrow_back_ios_new,
+                color: Colors.white,
+                size: 20,
+              ),
+              onPressed: _isJiggleMode ? null : () => Navigator.pop(context),
+            ),
           ),
-          onPressed: () => Navigator.pop(context),
+          actions: [
+            Opacity(
+              opacity: _isJiggleMode ? 0.35 : 1.0,
+              child: IconButton(
+                icon: const Icon(
+                  Icons.edit_outlined,
+                  color: Color(0xFF6C63FF),
+                  size: 22,
+                ),
+                onPressed: _isJiggleMode ? null : _showRenameDialog,
+              ),
+            ),
+            const SizedBox(width: 4),
+          ],
         ),
-        actions: _isJiggleMode
-            ? [
-                TextButton(
-                  onPressed: _exitJiggleMode,
-                  child: const Text(
-                    'Done',
-                    style: TextStyle(
-                      color: Color(0xFF6C63FF),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ]
-            : [
-                IconButton(
-                  icon: const Icon(
-                    Icons.edit_outlined,
-                    color: Color(0xFF6C63FF),
-                    size: 22,
-                  ),
-                  onPressed: _showRenameDialog,
-                ),
-                const SizedBox(width: 4),
-              ],
+        body: _buildBody(),
       ),
-      body: _buildBody(),
     );
   }
 
@@ -770,29 +768,32 @@ class _GroupScreenState extends State<GroupScreen>
             16,
             MediaQuery.of(context).padding.bottom + 16,
           ),
-          child: GestureDetector(
-            onTap: _showCreateSheet,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF6C63FF),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.add, color: Colors.white, size: 20),
-                  SizedBox(width: 6),
-                  Text(
-                    'Add Exercise',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
+          child: Opacity(
+            opacity: _isJiggleMode ? 0.4 : 1.0,
+            child: GestureDetector(
+              onTap: _isJiggleMode ? null : _showCreateSheet,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6C63FF),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add, color: Colors.white, size: 20),
+                    SizedBox(width: 6),
+                    Text(
+                      'Add Exercise',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

@@ -245,7 +245,6 @@ class _HomeScreenState extends State<HomeScreen>
         target.orderIndex = 1;
         _groups.add(group);
       });
-      _exitJiggleMode();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -532,14 +531,17 @@ class _HomeScreenState extends State<HomeScreen>
       final dragData = item is Exercise
           ? _ExerciseDrag(item)
           : _GroupDrag(item as ExerciseGroup);
-      child = Draggable<_DragData>(
-        data: dragData,
-        onDragStarted: () => setState(() => _dragging = dragData),
-        onDraggableCanceled: (velocity, offset) => setState(() => _dragging = null),
-        onDragEnd: (_) => setState(() => _dragging = null),
-        feedback: feedback,
-        childWhenDragging: Opacity(opacity: 0.3, child: displayCard),
-        child: displayCard,
+      child = GestureDetector(
+        onTap: () {}, // absorb tap so it doesn't reach the body's exit-jiggle handler
+        child: Draggable<_DragData>(
+          data: dragData,
+          onDragStarted: () => setState(() => _dragging = dragData),
+          onDraggableCanceled: (velocity, offset) => setState(() => _dragging = null),
+          onDragEnd: (_) => setState(() => _dragging = null),
+          feedback: feedback,
+          childWhenDragging: Opacity(opacity: 0.3, child: displayCard),
+          child: displayCard,
+        ),
       );
     } else {
       // Long-press enters jiggle mode AND starts the drag simultaneously,
@@ -597,45 +599,42 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      appBar: AppBar(
-        title: const Text(
-          'Progress',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
-        ),
-        centerTitle: true,
-        backgroundColor: const Color(0xFF1A1A1A),
-        surfaceTintColor: Colors.transparent,
-        leading: _isJiggleMode
-            ? null
-            : IconButton(
-                icon: const Icon(Icons.calendar_month_outlined,
-                    color: Colors.white, size: 24),
-                onPressed: _showCalendar,
-              ),
-        actions: _isJiggleMode
-            ? [
-                TextButton(
-                  onPressed: _exitJiggleMode,
-                  child: const Text(
-                    'Done',
-                    style: TextStyle(
-                      color: Color(0xFF6C63FF),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ]
-            : [
-                Padding(
-                  padding: const EdgeInsets.only(right: 16),
+    return GestureDetector(
+      onTap: _isJiggleMode ? _exitJiggleMode : null,
+      behavior: HitTestBehavior.translucent,
+      child: Scaffold(
+        backgroundColor: const Color(0xFF121212),
+        appBar: AppBar(
+          title: const Text(
+            'Progress',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
+          ),
+          centerTitle: true,
+          backgroundColor: const Color(0xFF1A1A1A),
+          surfaceTintColor: Colors.transparent,
+          leading: Opacity(
+            opacity: _isJiggleMode ? 0.35 : 1.0,
+            child: IconButton(
+              icon: const Icon(Icons.calendar_month_outlined,
+                  color: Colors.white, size: 24),
+              onPressed: _isJiggleMode ? null : _showCalendar,
+            ),
+          ),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Opacity(
+                opacity: _isJiggleMode ? 0.35 : 1.0,
+                child: IgnorePointer(
+                  ignoring: _isJiggleMode,
                   child: _buildAvatar(),
                 ),
-              ],
+              ),
+            ),
+          ],
+        ),
+        body: _buildBody(),
       ),
-      body: _buildBody(),
     );
   }
 
@@ -715,29 +714,32 @@ class _HomeScreenState extends State<HomeScreen>
         Padding(
           padding: EdgeInsets.fromLTRB(
               16, 8, 16, MediaQuery.of(context).padding.bottom + 16),
-          child: GestureDetector(
-            onTap: _showCreateSheet,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF6C63FF),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.add, color: Colors.white, size: 20),
-                  SizedBox(width: 6),
-                  Text(
-                    'Add Exercise',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
+          child: Opacity(
+            opacity: _isJiggleMode ? 0.4 : 1.0,
+            child: GestureDetector(
+              onTap: _isJiggleMode ? null : _showCreateSheet,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6C63FF),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add, color: Colors.white, size: 20),
+                    SizedBox(width: 6),
+                    Text(
+                      'Add Exercise',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
