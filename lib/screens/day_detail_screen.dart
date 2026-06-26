@@ -58,14 +58,24 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
       if (updated == null) return;
       final withId = updated.copyWith(id: original.id);
       await DatabaseService.instance.updateLog(withId);
-      if (mounted) {
-        setState(() {
+      if (!mounted) return;
+
+      // Keep the shared Exercise.logs list in sync so CalendarSheet stays valid
+      final logIdx = exercise.logs.indexWhere((l) => l.id == original.id);
+      if (logIdx != -1) exercise.logs[logIdx] = withId;
+
+      final newDate = DateTime(withId.date.year, withId.date.month, withId.date.day);
+      final screenDate = DateTime(widget.date.year, widget.date.month, widget.date.day);
+      setState(() {
+        if (newDate != screenDate) {
+          _entries = _entries.where((e) => e.log.id != original.id).toList();
+        } else {
           _entries = _entries.map((e) {
             if (e.log.id == original.id) return (log: withId, exercise: e.exercise);
             return e;
           }).toList();
-        });
-      }
+        }
+      });
     });
   }
 

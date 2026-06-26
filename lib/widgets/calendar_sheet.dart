@@ -82,7 +82,9 @@ class _CalendarSheetState extends State<CalendarSheet> {
       MaterialPageRoute(
         builder: (_) => DayDetailScreen(date: date, entries: entries),
       ),
-    );
+    ).then((_) {
+      if (mounted) setState(() => _buildIndex());
+    });
   }
 
   bool _isToday(int day) {

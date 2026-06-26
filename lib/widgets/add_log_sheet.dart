@@ -21,6 +21,7 @@ class AddLogSheet extends StatefulWidget {
 }
 
 class _AddLogSheetState extends State<AddLogSheet> {
+  // ── Workout inputs ──────────────────────────────────────────────
   late final TextEditingController _weightController;
   late final TextEditingController _totalRepsController;
   late final FixedExtentScrollController _hoursController;
@@ -32,6 +33,16 @@ class _AddLogSheetState extends State<AddLogSheet> {
   bool _isHoursMode = false;
   late bool _canLog;
 
+  // ── Date selection ──────────────────────────────────────────────
+  late final DateTime _today;
+  bool _isDifferentDay = false;
+  late int _selectedMonth;
+  late int _selectedDay;
+  late int _selectedYear;
+  late final FixedExtentScrollController _monthController;
+  late final FixedExtentScrollController _dayController;
+  late final FixedExtentScrollController _yearController;
+
   bool get _isEditing => widget.initialLog != null;
   bool get _isTimeBased => widget.exerciseType == ExerciseType.timeBased;
   bool get _isBodyweight => widget.isBodyweightOnly;
@@ -40,7 +51,31 @@ class _AddLogSheetState extends State<AddLogSheet> {
   void initState() {
     super.initState();
     final log = widget.initialLog;
+    final now = DateTime.now();
+    _today = DateTime(now.year, now.month, now.day);
 
+    // ── Date init ──
+    _selectedYear = _today.year;
+    _selectedMonth = _today.month;
+    _selectedDay = _today.day;
+
+    if (log != null) {
+      final logDate = DateTime(log.date.year, log.date.month, log.date.day);
+      if (logDate.isBefore(_today)) {
+        _selectedYear = log.date.year;
+        _selectedMonth = log.date.month;
+        _selectedDay = log.date.day;
+      }
+    }
+
+    _monthController =
+        FixedExtentScrollController(initialItem: _selectedMonth - 1);
+    _dayController =
+        FixedExtentScrollController(initialItem: _selectedDay - 1);
+    _yearController =
+        FixedExtentScrollController(initialItem: _today.year - _selectedYear);
+
+    // ── Workout input init ──
     _weightController = TextEditingController(
       text: log != null ? _stripTrailingZero(log.weight) : '',
     );
@@ -79,6 +114,9 @@ class _AddLogSheetState extends State<AddLogSheet> {
 
   @override
   void dispose() {
+    _monthController.dispose();
+    _dayController.dispose();
+    _yearController.dispose();
     _hoursController.dispose();
     _minutesController.dispose();
     _secondsController.dispose();
@@ -87,6 +125,96 @@ class _AddLogSheetState extends State<AddLogSheet> {
     }
     super.dispose();
   }
+
+  // ── Date helpers ────────────────────────────────────────────────
+
+  int _daysInMonth(int year, int month) =>
+      DateTime(year, month + 1, 0).day;
+
+  int _maxMonth(int year) =>
+      year == _today.year ? _today.month : 12;
+
+  int _maxDay(int year, int month) {
+    final calMax = _daysInMonth(year, month);
+    if (year == _today.year && month == _today.month) {
+      return _today.day < calMax ? _today.day : calMax;
+    }
+    return calMax;
+  }
+
+  DateTime get _selectedDate {
+    if (!_isDifferentDay) return widget.initialLog?.date ?? DateTime.now();
+    return DateTime(_selectedYear, _selectedMonth, _selectedDay);
+  }
+
+  void _onDifferentDayChanged(bool value) {
+    if (value) {
+      final log = widget.initialLog;
+      final logDate = log != null
+          ? DateTime(log.date.year, log.date.month, log.date.day)
+          : null;
+      if (logDate != null && logDate.isBefore(_today)) {
+        _selectedYear = logDate.year;
+        _selectedMonth = logDate.month;
+        _selectedDay = logDate.day;
+      } else {
+        _selectedYear = _today.year;
+        _selectedMonth = _today.month;
+        _selectedDay = _today.day;
+      }
+    } else {
+      _selectedYear = _today.year;
+      _selectedMonth = _today.month;
+      _selectedDay = _today.day;
+    }
+    if (_yearController.hasClients) {
+      _yearController.jumpToItem(_today.year - _selectedYear);
+    }
+    if (_monthController.hasClients) {
+      _monthController.jumpToItem(_selectedMonth - 1);
+    }
+    if (_dayController.hasClients) {
+      _dayController.jumpToItem(_selectedDay - 1);
+    }
+    setState(() => _isDifferentDay = value);
+  }
+
+  void _onYearChanged(int index) {
+    setState(() {
+      _selectedYear = _today.year - index;
+      final maxM = _maxMonth(_selectedYear);
+      if (_selectedMonth > maxM) {
+        _selectedMonth = maxM;
+        if (_monthController.hasClients) {
+          _monthController.jumpToItem(_selectedMonth - 1);
+        }
+      }
+      final maxD = _maxDay(_selectedYear, _selectedMonth);
+      if (_selectedDay > maxD) {
+        _selectedDay = maxD;
+        if (_dayController.hasClients) {
+          _dayController.jumpToItem(_selectedDay - 1);
+        }
+      }
+    });
+  }
+
+  void _onMonthChanged(int index) {
+    setState(() {
+      _selectedMonth = index + 1;
+      final maxD = _maxDay(_selectedYear, _selectedMonth);
+      if (_selectedDay > maxD) {
+        _selectedDay = maxD;
+        if (_dayController.hasClients) {
+          _dayController.jumpToItem(_selectedDay - 1);
+        }
+      }
+    });
+  }
+
+  void _onDayChanged(int index) => setState(() => _selectedDay = index + 1);
+
+  // ── Workout helpers ─────────────────────────────────────────────
 
   void _onChanged() {
     final controllersOk =
@@ -111,56 +239,170 @@ class _AddLogSheetState extends State<AddLogSheet> {
 
   void _submit() {
     final totalTime = _hours * 3600 + _minutes * 60 + _seconds;
+    final date = _selectedDate;
 
     if (_isTimeBased && _isBodyweight) {
       if (totalTime <= 0) return;
-      Navigator.pop(
-        context,
-        WorkoutLog(
-          date: widget.initialLog?.date ?? DateTime.now(),
-          weight: 0,
-          totalTime: totalTime,
-          isHoursUsed: _isHoursMode,
-        ),
-      );
+      Navigator.pop(context,
+          WorkoutLog(date: date, weight: 0, totalTime: totalTime, isHoursUsed: _isHoursMode));
     } else if (_isTimeBased) {
       final weight = double.tryParse(_weightController.text.trim());
       if (weight == null || weight <= 0 || totalTime <= 0) return;
-      Navigator.pop(
-        context,
-        WorkoutLog(
-          date: widget.initialLog?.date ?? DateTime.now(),
-          weight: weight,
-          totalTime: totalTime,
-          isHoursUsed: _isHoursMode,
-        ),
-      );
+      Navigator.pop(context,
+          WorkoutLog(date: date, weight: weight, totalTime: totalTime, isHoursUsed: _isHoursMode));
     } else if (_isBodyweight) {
       final totalReps = int.tryParse(_totalRepsController.text.trim());
       if (totalReps == null || totalReps <= 0) return;
-      Navigator.pop(
-        context,
-        WorkoutLog(
-          date: widget.initialLog?.date ?? DateTime.now(),
-          weight: 0,
-          totalReps: totalReps,
-        ),
-      );
+      Navigator.pop(context,
+          WorkoutLog(date: date, weight: 0, totalReps: totalReps));
     } else {
       final weight = double.tryParse(_weightController.text.trim());
       final totalReps = int.tryParse(_totalRepsController.text.trim());
       if (weight == null || totalReps == null) return;
       if (weight <= 0 || totalReps <= 0) return;
-      Navigator.pop(
-        context,
-        WorkoutLog(
-          date: widget.initialLog?.date ?? DateTime.now(),
-          weight: weight,
-          totalReps: totalReps,
-        ),
-      );
+      Navigator.pop(context,
+          WorkoutLog(date: date, weight: weight, totalReps: totalReps));
     }
   }
+
+  // ── Date picker widget ──────────────────────────────────────────
+
+  static const _months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+
+  Widget _buildDatePicker() {
+    const pickerHeight = 180.0;
+    const itemExtent = 46.0;
+    const textStyle = TextStyle(
+      color: Colors.white,
+      fontSize: 18,
+      fontWeight: FontWeight.w400,
+    );
+
+    Widget wheel({
+      required FixedExtentScrollController controller,
+      required int childCount,
+      required Widget Function(int) builder,
+      required void Function(int) onChanged,
+    }) {
+      return CupertinoPicker.builder(
+        scrollController: controller,
+        itemExtent: itemExtent,
+        childCount: childCount,
+        onSelectedItemChanged: onChanged,
+        selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
+          background: const Color(0xFF6C63FF).withValues(alpha: 0.12),
+        ),
+        itemBuilder: (_, i) => Center(child: builder(i)),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'DATE',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.45),
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.8,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: pickerHeight,
+          decoration: BoxDecoration(
+            color: const Color(0xFF2A2A2A),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              // Month
+              Expanded(
+                flex: 4,
+                child: wheel(
+                  controller: _monthController,
+                  childCount: _maxMonth(_selectedYear),
+                  builder: (i) => Text(_months[i], style: textStyle),
+                  onChanged: _onMonthChanged,
+                ),
+              ),
+              // Day
+              Expanded(
+                flex: 2,
+                child: wheel(
+                  controller: _dayController,
+                  childCount: _maxDay(_selectedYear, _selectedMonth),
+                  builder: (i) => Text('${i + 1}', style: textStyle),
+                  onChanged: _onDayChanged,
+                ),
+              ),
+              // Year
+              Expanded(
+                flex: 3,
+                child: wheel(
+                  controller: _yearController,
+                  childCount: 11,
+                  builder: (i) =>
+                      Text('${_today.year - i}', style: textStyle),
+                  onChanged: _onYearChanged,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              flex: 4,
+              child: Center(
+                child: Text(
+                  'month',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    fontSize: 11,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Center(
+                child: Text(
+                  'day',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    fontSize: 11,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 3,
+              child: Center(
+                child: Text(
+                  'year',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    fontSize: 11,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ── Build ───────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -187,14 +429,55 @@ class _AddLogSheetState extends State<AddLogSheet> {
             ),
           ),
           const SizedBox(height: 28),
-          Text(
-            _isEditing ? 'Edit Log' : 'Log Workout',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
+          // Title + "Different Day?" pill
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _isEditing ? 'Edit Log' : 'Log Workout',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              GestureDetector(
+                onTap: () => _onDifferentDayChanged(!_isDifferentDay),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _isDifferentDay
+                        ? const Color(0xFF6C63FF).withValues(alpha: 0.2)
+                        : Colors.white.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: _isDifferentDay
+                          ? const Color(0xFF6C63FF).withValues(alpha: 0.5)
+                          : Colors.white.withValues(alpha: 0.15),
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    'Different Day?',
+                    style: TextStyle(
+                      color: _isDifferentDay
+                          ? const Color(0xFF6C63FF)
+                          : Colors.white.withValues(alpha: 0.35),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
+          if (_isDifferentDay) ...[
+            const SizedBox(height: 20),
+            _buildDatePicker(),
+          ],
           const SizedBox(height: 28),
           if (_isTimeBased && _isBodyweight)
             _TimePicker(
@@ -297,6 +580,8 @@ class _AddLogSheetState extends State<AddLogSheet> {
     );
   }
 }
+
+// ── Time picker ─────────────────────────────────────────────────────
 
 class _TimePicker extends StatelessWidget {
   const _TimePicker({
@@ -514,6 +799,8 @@ class _TimePicker extends StatelessWidget {
     );
   }
 }
+
+// ── Text input field ────────────────────────────────────────────────
 
 class _InputField extends StatelessWidget {
   const _InputField({
