@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/exercise.dart';
@@ -41,6 +42,9 @@ class _GroupScreenState extends State<GroupScreen>
   bool _isJiggleMode = false;
   _DragData? _dragging;
   late final AnimationController _jiggleController;
+  late final ScrollController _scrollController;
+  Timer? _scrollTimer;
+  final _listKey = GlobalKey();
   late String _groupName;
 
   @override
@@ -51,11 +55,14 @@ class _GroupScreenState extends State<GroupScreen>
       vsync: this,
       duration: const Duration(milliseconds: 500),
     );
+    _scrollController = ScrollController();
     _loadData();
   }
 
   @override
   void dispose() {
+    _scrollTimer?.cancel();
+    _scrollController.dispose();
     _jiggleController.dispose();
     super.dispose();
   }
@@ -102,6 +109,7 @@ class _GroupScreenState extends State<GroupScreen>
   void _exitJiggleMode() {
     _jiggleController.stop();
     _jiggleController.reset();
+    _stopAutoScroll();
     setState(() {
       _isJiggleMode = false;
       _dragging = null;
@@ -249,31 +257,32 @@ class _GroupScreenState extends State<GroupScreen>
   }
 
   Future<void> _moveItemToRoot(_DragData data) async {
+    final targetParentId = widget.group.parentGroupId;
+    final newIdx =
+        _exercises.where((e) => e.groupId == targetParentId).length +
+        _groups.where((g) => g.parentGroupId == targetParentId).length;
+
     if (data is _ExerciseDrag) {
       final exercise = data.exercise;
-      final rootCount =
-          _exercises.where((e) => e.groupId == null).length +
-          _groups.where((g) => g.parentGroupId == null).length;
       await DatabaseService.instance.moveExerciseToGroup(
         exercise.id,
-        null,
-        rootCount,
+        targetParentId,
+        newIdx,
       );
       setState(() {
-        exercise.groupId = null;
-        exercise.orderIndex = rootCount;
+        exercise.groupId = targetParentId;
+        exercise.orderIndex = newIdx;
       });
     } else if (data is _GroupDrag) {
       final group = data.group;
-      final rootCount = _groups.where((g) => g.parentGroupId == null).length;
       await DatabaseService.instance.moveGroupToParent(
         group.id,
-        null,
-        rootCount,
+        targetParentId,
+        newIdx,
       );
       setState(() {
-        group.parentGroupId = null;
-        group.orderIndex = rootCount;
+        group.parentGroupId = targetParentId;
+        group.orderIndex = newIdx;
       });
     }
     await _checkAndDeleteEmptyGroup(widget.group.id);
@@ -396,6 +405,44 @@ class _GroupScreenState extends State<GroupScreen>
     });
     if (oldParentId != null && oldParentId != target.id) {
       await _checkAndDeleteEmptyGroup(oldParentId);
+    }
+  }
+
+  // ── Auto-scroll ─────────────────────────────────────────────────
+
+  void _startAutoScroll(double direction) {
+    _scrollTimer?.cancel();
+    _scrollTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
+      if (!_scrollController.hasClients) return;
+      final pos = _scrollController.position;
+      final next = (pos.pixels + direction * 6).clamp(
+        pos.minScrollExtent,
+        pos.maxScrollExtent,
+      );
+      if (next == pos.pixels) {
+        _stopAutoScroll();
+        return;
+      }
+      _scrollController.jumpTo(next);
+    });
+  }
+
+  void _stopAutoScroll() {
+    _scrollTimer?.cancel();
+    _scrollTimer = null;
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (_dragging == null) return;
+    final box = _listKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final localY = box.globalToLocal(event.position).dy;
+    if (localY > box.size.height - 100) {
+      _startAutoScroll(1);
+    } else if (localY < 100) {
+      _startAutoScroll(-1);
+    } else {
+      _stopAutoScroll();
     }
   }
 
@@ -537,8 +584,17 @@ class _GroupScreenState extends State<GroupScreen>
               setState(() => _dragging = null),
           onDragEnd: (_) => setState(() => _dragging = null),
           feedback: feedback,
-          childWhenDragging: Opacity(opacity: 0.3, child: displayCard),
-          child: displayCard,
+          childWhenDragging: Opacity(opacity: 0.3, child: rawCard),
+          child: AnimatedBuilder(
+            animation: _jiggleController,
+            builder: (context, innerChild) {
+              final angle =
+                  math.sin(_jiggleController.value * math.pi * 2 + index * 1.1) *
+                  0.018;
+              return Transform.rotate(angle: angle, child: innerChild);
+            },
+            child: displayCard,
+          ),
         ),
       );
     } else {
@@ -578,17 +634,7 @@ class _GroupScreenState extends State<GroupScreen>
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: AnimatedBuilder(
-        animation: _jiggleController,
-        builder: (context, innerChild) {
-          if (!_isJiggleMode) return innerChild!;
-          final angle =
-              math.sin(_jiggleController.value * math.pi * 2 + index * 1.1) *
-              0.018;
-          return Transform.rotate(angle: angle, child: innerChild);
-        },
-        child: child,
-      ),
+      child: child,
     );
   }
 
@@ -751,13 +797,20 @@ class _GroupScreenState extends State<GroupScreen>
                     ),
                   ),
                 )
-              : ListView.builder(
-                  padding: const EdgeInsets.only(top: 12, bottom: 8),
-                  itemCount: 2 * items.length + 1,
-                  itemBuilder: (context, index) {
-                    if (index.isEven) return _buildGap(index ~/ 2);
-                    return _buildItem(items[index ~/ 2], index ~/ 2);
-                  },
+              : Listener(
+                  onPointerMove: _onPointerMove,
+                  onPointerUp: (_) => _stopAutoScroll(),
+                  onPointerCancel: (_) => _stopAutoScroll(),
+                  child: ListView.builder(
+                    key: _listKey,
+                    controller: _scrollController,
+                    padding: const EdgeInsets.only(top: 12, bottom: 8),
+                    itemCount: 2 * items.length + 1,
+                    itemBuilder: (context, index) {
+                      if (index.isEven) return _buildGap(index ~/ 2);
+                      return _buildItem(items[index ~/ 2], index ~/ 2);
+                    },
+                  ),
                 ),
         ),
         _buildMoveOutZone(),
