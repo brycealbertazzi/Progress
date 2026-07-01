@@ -161,6 +161,13 @@ export default function PrivacyPolicy() {
             </p>
           </section>
 
+          <section>
+            <h2 className="text-lg sm:text-xl font-semibold text-white mb-3">10. Contact Us</h2>
+            <p>
+              If you have any questions to would like to reach out for support - You can email us at support@albertazzilabs.com
+            </p>
+          </section>
+
         </div>
       </div>
 
