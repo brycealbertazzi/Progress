@@ -899,7 +899,7 @@ class _ExerciseCardContent extends StatelessWidget {
                 if (exercise.isBodyweightOnly) ...[
                   const SizedBox(width: 8),
                   BodyweightBadge(
-                    size: 16,
+                    size: 20,
                     color: Colors.white.withValues(alpha: 0.5),
                   ),
                 ],
