@@ -238,39 +238,42 @@ class _DayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.all(3),
-        decoration: isToday
-            ? BoxDecoration(
-                border: Border.all(color: const Color(0xFF6C63FF), width: 1.5),
-                borderRadius: BorderRadius.circular(8),
-              )
-            : null,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              '$day',
-              style: TextStyle(
-                color: hasLogs ? Colors.white : Colors.white.withValues(alpha: 0.2),
-                fontSize: 15,
-                fontWeight: hasLogs ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
-            const SizedBox(height: 3),
-            if (hasLogs)
-              Container(
-                width: 4,
-                height: 4,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF6C63FF),
-                  shape: BoxShape.circle,
+      child: Padding(
+        padding: const EdgeInsets.all(3),
+        child: Container(
+          decoration: isToday
+              ? BoxDecoration(
+                  border: Border.all(color: const Color(0xFF6C63FF), width: 1.5),
+                  borderRadius: BorderRadius.circular(8),
+                )
+              : null,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '$day',
+                style: TextStyle(
+                  color: hasLogs ? Colors.white : Colors.white.withValues(alpha: 0.2),
+                  fontSize: 15,
+                  fontWeight: hasLogs ? FontWeight.w600 : FontWeight.w400,
                 ),
-              )
-            else
-              const SizedBox(height: 4),
-          ],
+              ),
+              const SizedBox(height: 3),
+              if (hasLogs)
+                Container(
+                  width: 4,
+                  height: 4,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF6C63FF),
+                    shape: BoxShape.circle,
+                  ),
+                )
+              else
+                const SizedBox(height: 4),
+            ],
+          ),
         ),
       ),
     );
