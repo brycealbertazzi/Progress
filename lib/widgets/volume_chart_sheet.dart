@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import '../models/exercise.dart';
@@ -268,7 +270,7 @@ class VolumeChartSheet extends StatelessWidget {
 
     final maxY = daily.map((d) => d.volume).reduce((a, b) => a > b ? a : b);
     final minY = daily.map((d) => d.volume).reduce((a, b) => a < b ? a : b);
-    final yPadding = (maxY - minY) * 0.2;
+    final yAxis = _buildYAxis(minY, maxY);
     final lineBars = _buildLineBars(daily, spots);
 
     return Stack(
@@ -277,8 +279,8 @@ class VolumeChartSheet extends StatelessWidget {
           LineChartData(
             minX: 0,
             maxX: (daily.length - 1).toDouble(),
-            minY: (minY - yPadding).clamp(0, double.infinity),
-            maxY: maxY + yPadding,
+            minY: yAxis.min,
+            maxY: yAxis.max,
             lineBarsData: lineBars,
             titlesData: FlTitlesData(
               topTitles: const AxisTitles(
@@ -289,11 +291,11 @@ class VolumeChartSheet extends StatelessWidget {
                 sideTitles: SideTitles(
                   showTitles: true,
                   reservedSize: 52,
-                  interval: _niceInterval(minY, maxY),
+                  interval: yAxis.interval,
                   getTitlesWidget: (value, meta) => Padding(
                     padding: const EdgeInsets.only(right: 6),
                     child: Text(
-                      _formatY(value),
+                      _formatAxisLabel(value, yAxis.interval),
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.4),
                         fontSize: 11,
@@ -331,7 +333,7 @@ class VolumeChartSheet extends StatelessWidget {
             gridData: FlGridData(
               show: true,
               drawVerticalLine: false,
-              horizontalInterval: _niceInterval(minY, maxY),
+              horizontalInterval: yAxis.interval,
               getDrawingHorizontalLine: (_) => FlLine(
                 color: Colors.white.withValues(alpha: 0.06),
                 strokeWidth: 1,
@@ -391,18 +393,67 @@ class VolumeChartSheet extends StatelessWidget {
     return (count / 4).ceilToDouble();
   }
 
-  double _niceInterval(double min, double max) {
-    final range = (max - min).abs();
-    if (_isTimeBased && _isBodyweight) {
-      if (range <= 0) return 15;
-      final rough = range / 4;
-      const steps = [5.0, 10.0, 15.0, 30.0, 60.0, 120.0, 300.0];
-      return steps.firstWhere((s) => s >= rough, orElse: () => 300);
+  /// Bounds snapped to whole multiples of [interval] so every tick lands on a
+  /// round number, targeting 5 ticks (6 at most).
+  _YAxis _buildYAxis(double dataMin, double dataMax) {
+    final isTime = _isTimeBased && _isBodyweight;
+    var lo = dataMin;
+    var hi = dataMax;
+
+    if (hi - lo <= 0) {
+      final bump = hi.abs() < 1 ? (isTime ? 60.0 : 100.0) : hi.abs() * 0.2;
+      lo -= bump;
+      hi += bump;
+    } else {
+      final pad = (hi - lo) * 0.2;
+      lo -= pad;
+      hi += pad;
     }
-    if (range <= 0) return 500;
-    final rough = range / 4;
-    const steps = [100.0, 200.0, 250.0, 500.0, 1000.0, 2000.0, 2500.0, 5000.0];
-    return steps.firstWhere((s) => s >= rough, orElse: () => 5000);
+    if (lo < 0) lo = 0;
+
+    const targetTicks = 5;
+    final rough = (hi - lo) / targetTicks;
+    final interval = isTime ? _niceTimeStep(rough) : _niceStep(rough);
+
+    return _YAxis(
+      (lo / interval).floorToDouble() * interval,
+      (hi / interval).ceilToDouble() * interval,
+      interval,
+    );
+  }
+
+  /// Rounds up to the next 1/2/5 × 10^n step, so ticks stay whole numbers.
+  double _niceStep(double rough) {
+    if (rough <= 1) return 1;
+    final magnitude =
+        math.pow(10, (math.log(rough) / math.ln10).floor()).toDouble();
+    for (final m in const [1.0, 2.0, 5.0]) {
+      final step = magnitude * m;
+      if (step >= rough) return step;
+    }
+    return magnitude * 10;
+  }
+
+  double _niceTimeStep(double rough) {
+    const steps = [
+      5.0, 10.0, 15.0, 30.0, 60.0, 120.0, 300.0,
+      600.0, 900.0, 1800.0, 3600.0
+    ];
+    return steps.firstWhere(
+      (s) => s >= rough,
+      orElse: () => (rough / 3600).ceilToDouble() * 3600,
+    );
+  }
+
+  /// Uses just enough precision for the tick spacing, so no two labels on the
+  /// axis can round to the same text.
+  String _formatAxisLabel(double v, double interval) {
+    if (_isTimeBased && _isBodyweight) return _formatTime(v.round());
+    if (v.abs() >= 1000) {
+      final decimals = interval >= 1000 ? 0 : (interval >= 100 ? 1 : 2);
+      return '${(v / 1000).toStringAsFixed(decimals)}k';
+    }
+    return v.round().toString();
   }
 
   String _formatY(double v) {
@@ -426,4 +477,12 @@ class VolumeChartSheet extends StatelessWidget {
     ];
     return '${months[d.month - 1]} ${d.day}';
   }
+}
+
+class _YAxis {
+  const _YAxis(this.min, this.max, this.interval);
+
+  final double min;
+  final double max;
+  final double interval;
 }
